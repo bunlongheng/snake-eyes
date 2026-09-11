@@ -82,7 +82,7 @@ const showAll = await inShadow(page, () => { const sh = window.__snakeEyes.shado
 check(showAll.boxes === 6 && showAll.lines >= 6 && showAll.current === 0, `Show all draws a box per issue (${showAll.boxes}) and ${showAll.lines} guides`);
 if (process.env.SNK_HERO) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(1800); // let the Copied label reset
   mkdirSync(join(root, "docs"), { recursive: true });
   await page.screenshot({ path: join(root, "docs", "hero.png"), clip: { x: 0, y: 0, width: 1280, height: 900 } });
   console.log("hero: docs/hero.png refreshed");

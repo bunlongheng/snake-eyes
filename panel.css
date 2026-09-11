@@ -39,7 +39,7 @@
   .snk-panel { top: auto; right: 8px; left: 8px; bottom: 8px; width: auto; max-width: none; max-height: 45vh; }
 }
 .snk-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--snk-line); background: var(--snk-bg2); }
-.snk-title-h { margin: 0; font-size: 14px; font-weight: 700; }
+.snk-title-h { margin: 0; font-size: 14px; font-weight: 700; white-space: nowrap; }
 .snk-logo { display: inline-flex; gap: 3px; width: 26px; height: 26px; border-radius: 8px; background: #0b1220; align-items: center; justify-content: center; flex-shrink: 0; }
 .snk-logo i { display: block; width: 7px; height: 10px; border-radius: 50%; background: #d1fa4a; position: relative; }
 .snk-logo i::after { content: ""; position: absolute; left: 3px; top: 1px; width: 1.5px; height: 8px; background: #0b1220; border-radius: 1px; }
