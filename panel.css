@@ -1,0 +1,47 @@
+/* Styles for the Snake Eyes shadow root: the guide layer and the side panel.
+   background.js reads this file and hands its text to overlay.js, which puts it inside
+   the shadow root, so nothing here can touch the page and the page cannot touch it. */
+:host { all: initial; }
+* { box-sizing: border-box; }
+
+/* document-sized layer for guides; never intercepts the page */
+.snk-layer { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; }
+.snk-box { position: absolute; border: 1px dashed #c0392b; border-radius: 3px; }
+.snk-box.snk-active { border: 2px solid #c0392b; box-shadow: 0 0 0 4px rgba(192, 57, 43, 0.15); }
+.snk-line { position: absolute; }
+.snk-hline { height: 0; border-top: 2px dashed; transform: translateY(-1px); }
+.snk-vline { width: 0; border-left: 2px dashed; transform: translateX(-1px); }
+.snk-edge { border-left-style: solid; }
+.snk-bad { border-color: #c0392b; }
+.snk-ok { border-color: #16a34a; }
+.snk-badge { position: absolute; transform: translate(-50%, -50%); font: 700 11px/1 ui-monospace, Menlo, monospace; padding: 3px 6px; border-radius: 6px; color: #fff; white-space: nowrap; letter-spacing: 0.02em; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }
+.snk-badge.snk-bad { background: #c0392b; }
+.snk-badge.snk-ok { background: #16a34a; }
+
+/* the panel */
+.snk-panel { position: fixed; top: 12px; right: 12px; bottom: 12px; width: 380px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; background: #ffffff; color: #1a2129; border: 1px solid #e5e7eb; border-radius: 14px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25); font: 13px/1.45 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; z-index: 2; overflow: hidden; }
+.snk-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: #f7f8fa; }
+.snk-head b { font-size: 14px; }
+.snk-logo { display: inline-flex; gap: 3px; width: 26px; height: 26px; border-radius: 8px; background: #0b1220; align-items: center; justify-content: center; flex-shrink: 0; }
+.snk-logo i { display: block; width: 7px; height: 10px; border-radius: 50%; background: #d1fa4a; position: relative; }
+.snk-logo i::after { content: ""; position: absolute; left: 3px; top: 1px; width: 1.5px; height: 8px; background: #0b1220; border-radius: 1px; }
+.snk-count { margin-right: auto; font-weight: 700; color: #c0392b; background: #ffeaea; border-radius: 999px; padding: 2px 9px; font-size: 12px; }
+.snk-btn { font: 600 12px/1 inherit; padding: 6px 9px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; color: #1a2129; cursor: pointer; }
+.snk-btn:hover { background: #f1f5f9; }
+.snk-copy { background: #1a2129; color: #fff; border-color: #1a2129; }
+.snk-copy:hover { background: #374151; }
+.snk-x { font: 700 13px/1 inherit; width: 26px; height: 26px; border-radius: 8px; border: 0; background: transparent; color: #6b7280; cursor: pointer; }
+.snk-x:hover { background: #e5e7eb; color: #1a2129; }
+.snk-list { list-style: none; margin: 0; padding: 6px; overflow: auto; flex: 1; }
+.snk-item { display: grid; grid-template-columns: 24px auto 1fr; grid-template-rows: auto auto; column-gap: 8px; row-gap: 2px; align-items: center; padding: 8px 10px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
+.snk-item:hover { background: #f7f8fa; }
+.snk-item.snk-current { background: #fff6e0; border-color: #fcd34d; }
+.snk-n { font: 700 11px/1 ui-monospace, Menlo, monospace; color: #6b7280; }
+.snk-tag { font: 700 10px/1 inherit; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 6px; border-radius: 999px; background: #eef2ff; color: #4338ca; justify-self: start; }
+.snk-high .snk-tag { background: #ffeaea; color: #c0392b; }
+.snk-medium .snk-tag { background: #fff6e0; color: #b45309; }
+.snk-low .snk-tag { background: #e7f7ec; color: #15803d; }
+.snk-title { font-weight: 600; grid-column: 3; }
+.snk-detail { grid-column: 2 / 4; color: #6b7280; font-size: 12px; }
+.snk-empty { padding: 20px 12px; color: #6b7280; }
+.snk-foot { padding: 8px 12px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 11px; background: #f7f8fa; }

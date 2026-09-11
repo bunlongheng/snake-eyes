@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Snake Eyes fixture</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; color: #1a2129; background: #fff; }
+  section { padding: 64px 0; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 32px; }
+  h2 { margin: 0 0 16px; }
+  /* 1. section rhythm: this one uses 48px top instead of 64px */
+  #hero { padding-top: 48px; background: #f6f8fa; }
+  /* 2. content inset: this section's wrap is 40px instead of 32px */
+  #about .wrap { padding: 0 40px; }
+  /* 3. a card row with one wrong gap */
+  .cards { display: flex; }
+  .card { width: 200px; height: 120px; background: #e5e7eb; border-radius: 12px; margin-right: 24px; }
+  .card:nth-child(3) { margin-right: 31px; }
+  .card:last-child { margin-right: 0; }
+  /* 4. stacked list with one indented item */
+  .list > div { background: #eef2ff; padding: 12px; margin-bottom: 12px; }
+  .list > div:nth-child(2) { margin-left: 6px; }
+  /* 5. asymmetric padding */
+  .callout { background: #fff6e0; padding: 16px 24px 16px 16px; }
+  /* 6. uneven vertical gaps */
+  .stack > p { margin: 0 0 16px; background: #f1f5f9; padding: 8px; }
+  .stack > p:nth-child(2) { margin-bottom: 28px; }
+</style>
+</head>
+<body>
+  <section id="hero"><div class="wrap"><h2>Hero</h2><p>Section with 48px top padding while every other section uses 64px.</p></div></section>
+  <section id="features"><div class="wrap"><h2>Features</h2>
+    <div class="cards"><div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div></div>
+  </div></section>
+  <section id="about"><div class="wrap"><h2>About</h2><p>This section's content is inset 40px instead of 32px.</p></div></section>
+  <section id="list"><div class="wrap"><h2>List</h2>
+    <div class="list"><div>Item 1</div><div>Item 2 (indented 6px)</div><div>Item 3</div></div>
+  </div></section>
+  <section id="callout"><div class="wrap"><div class="callout"><h2>Callout</h2><p>Padding is 16px on the left and 24px on the right.</p></div></div></section>
+  <section id="stack"><div class="wrap"><h2>Stack</h2>
+    <div class="stack"><p>Paragraph 1</p><p>Paragraph 2 (28px below instead of 16px)</p><p>Paragraph 3</p><p>Paragraph 4</p></div>
+  </div></section>
+</body>
+</html>
