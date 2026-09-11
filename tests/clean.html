@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Snake Eyes clean fixture</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; color: #1a2129; background: #fff; }
+  section { padding: 64px 0; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 32px; }
+  h2 { margin: 0 0 16px; }
+  p { margin: 0 0 16px; }
+  .hero { text-align: center; }
+  .hero h1 { margin: 0 0 12px; font-size: 40px; }
+  .hero p { max-width: 520px; margin: 0 auto 16px; }
+  .cards { display: flex; gap: 24px; }
+  .card { width: 200px; height: 120px; background: #e5e7eb; border-radius: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .cell { height: 90px; background: #eef2ff; border-radius: 8px; }
+  .list > div { background: #f1f5f9; padding: 12px; margin-bottom: 12px; }
+  .callout { background: #fff6e0; padding: 16px; }
+  a { color: #1d4ed8; }
+</style>
+</head>
+<body>
+  <section class="hero"><div class="wrap"><h1>Centered hero</h1><p>A centered hero with text of different widths should not be an edge issue.</p><p>Second line, narrower.</p></div></section>
+  <section><div class="wrap"><h2>Prose</h2>
+    <p>A paragraph with <a href="#">3 inline</a> links, some <b>bold</b> text and <a href="#">another</a> link and <a href="#">1 more</a> is not a layout row.</p>
+    <p>Second paragraph with <code>code</code>, <em>emphasis</em> and <a href="#">a link</a>.</p>
+  </div></section>
+  <section><div class="wrap"><h2>Cards</h2><div class="cards"><div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div></div></div></section>
+  <section><div class="wrap"><h2>Grid</h2><div class="grid"><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div></div></div></section>
+  <section><div class="wrap"><h2>List</h2><div class="list"><div>Item 1</div><div>Item 2</div><div>Item 3</div></div></div></section>
+  <section><div class="wrap"><div class="callout"><h2>Callout</h2><p>Even padding on every side.</p></div></div></section>
+</body>
+</html>

@@ -1,15 +1,20 @@
 {
   "name": "snake-eyes",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Chrome extension that spots inconsistent spacing on any page and hands you an agent-ready report.",
+  "engines": { "node": ">=22" },
   "scripts": {
-    "test": "node tests/verify.mjs",
-    "lint": "eslint overlay.js background.js tests",
+    "test": "node --test tests/helpers.test.mjs && node tests/verify.mjs",
+    "hero": "SNK_HERO=1 node tests/verify.mjs",
+    "lint": "eslint --max-warnings 0 overlay.js background.js lib tests scripts eslint.config.mjs",
+    "check:version": "node scripts/check-version.mjs",
+    "pack": "node scripts/pack.mjs",
     "icons": "node scripts/icons.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "globals": "^17.0.0",
     "eslint": "^10.9.1",
     "playwright": "^1.62.1",
     "sharp": "^0.35.4"

@@ -1,51 +1,63 @@
 // Snake Eyes: spacing audit overlay.
-// Injected on demand by background.js. Runs once, draws guides + a panel, and removes
-// itself when injected again (toggle). Everything lives under #snake-eyes-root so the page
-// is never modified; window.__snakeEyes exposes the issues and the report for tests.
+// Injected on demand by background.js after lib/pure.js. Runs once, draws guides + a panel,
+// and removes itself when injected again (toggle). Everything lives in a closed shadow root
+// under #snake-eyes-root, so page CSS cannot restyle it and page script cannot reach it.
+// The IIFE returns true when it closed an existing overlay, so background.js can remove
+// the page-level CSS again. window.__snakeEyes (isolated world only) is the test hook.
 (() => {
   const ROOT_ID = "snake-eyes-root";
+  const MARK = "data-snake-eyes";
   const existing = document.getElementById(ROOT_ID);
-  if (existing) {
-    existing.remove();
-    delete window.__snakeEyes;
-    return;
+  if (existing && existing.hasAttribute(MARK) && typeof existing.__snkClose === "function") {
+    existing.__snkClose();
+    return true;
   }
+  if (!document.body) return false;
 
-  const TOL = 2; // px: anything inside this is treated as equal
-  const MAX_ISSUES = 150;
-  const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "TEMPLATE", "BR", "HR", "SVG", "PATH", "CANVAS", "IFRAME", "OPTION"]);
+  const { TOL, LIMITS, px, same, severityFor, mode, outliers, sameKind } = globalThis.__snkPure;
+  void mode;
+  const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "TEMPLATE", "BR", "HR", "CANVAS", "IFRAME", "OPTION"]);
+  const HTML_NS = "http://www.w3.org/1999/xhtml";
 
-  // ---------- helpers ----------
-  const px = (v) => Math.round(parseFloat(v) || 0);
-  const same = (a, b) => Math.abs(a - b) <= TOL;
-  const rectOf = (el) => {
-    const r = el.getBoundingClientRect();
-    return { top: r.top + scrollY, left: r.left + scrollX, right: r.right + scrollX, bottom: r.bottom + scrollY, width: r.width, height: r.height };
-  };
-  const isVisible = (el) => {
-    if (!(el instanceof Element) || SKIP_TAGS.has(el.tagName.toUpperCase()) || el.namespaceURI !== "http://www.w3.org/1999/xhtml" || el.closest(`#${ROOT_ID}`)) return false;
+  // ---------- 1 pass over the DOM: rect + computed style once per element ----------
+  const info = new Map();
+  let nodesSeen = 0, scanTruncated = false;
+  const visit = (el) => {
+    if (el.namespaceURI !== HTML_NS || SKIP_TAGS.has(el.tagName) || el.id === ROOT_ID) return false;
     const cs = getComputedStyle(el);
-    if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") return false;
-    const r = el.getBoundingClientRect();
-    return r.width > 1 && r.height > 1;
+    if (cs.display === "none") return false;
+    const b = el.getBoundingClientRect();
+    const r = { top: b.top + scrollY, left: b.left + scrollX, right: b.right + scrollX, bottom: b.bottom + scrollY, width: b.width, height: b.height };
+    const visible = cs.visibility !== "hidden" && cs.opacity !== "0" && b.width > 1 && b.height > 1;
+    const inFlow = cs.position !== "absolute" && cs.position !== "fixed" && cs.display !== "contents";
+    info.set(el, { cs, r, visible, inFlow, kids: null, label: null });
+    return visible || cs.overflow === "visible"; // a zero-size box can still have visible overflow
   };
-  const inFlow = (el) => {
-    const cs = getComputedStyle(el);
-    return cs.position !== "absolute" && cs.position !== "fixed" && cs.display !== "contents";
+  const stack = [document.body];
+  while (stack.length) {
+    const el = stack.pop();
+    if (++nodesSeen > LIMITS.maxNodes) { scanTruncated = true; break; }
+    if (!visit(el)) continue;
+    for (let i = el.children.length - 1; i >= 0; i--) stack.push(el.children[i]);
+  }
+  const get = (el) => info.get(el);
+  const rectOf = (el) => get(el).r;
+  const kidsOf = (el) => {
+    const i = get(el);
+    if (!i) return [];
+    if (!i.kids) {
+      i.kids = [];
+      for (const c of el.children) { const ci = get(c); if (ci && ci.visible && ci.inFlow) i.kids.push(c); }
+    }
+    return i.kids;
   };
-  const kidsOf = (el) => [...el.children].filter((c) => isVisible(c) && inFlow(c));
-  const mode = (nums) => {
-    const counts = new Map();
-    for (const n of nums) counts.set(n, (counts.get(n) || 0) + 1);
-    let best = nums[0], bestN = 0;
-    for (const [n, c] of counts) if (c > bestN) { best = n; bestN = c; }
-    if (bestN === 1) { const s = [...nums].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; }
-    return best;
-  };
+  const all = [...info.keys()].filter((el) => get(el).visible);
+
+  // ---------- helpers that need the DOM ----------
   const selector = (el) => {
     const parts = [];
     let e = el, depth = 0;
-    while (e && e.nodeType === 1 && e !== document.body && depth < 7) {
+    while (e && e.nodeType === 1 && e !== document.body && depth < LIMITS.selectorDepth) {
       let s = e.tagName.toLowerCase();
       if (e.id && !/\d{3,}/.test(e.id)) { parts.unshift(`${s}#${CSS.escape(e.id)}`); break; }
       const p = e.parentElement;
@@ -62,238 +74,240 @@
     }
     return parts.join(" > ");
   };
+  // Up to labelChars of the element's text, reading text nodes in order and stopping early.
   const label = (el) => {
-    const t = (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 28);
-    return `<${el.tagName.toLowerCase()}>${t ? ` "${t}${t.length === 28 ? "..." : ""}"` : ""}`;
+    const i = get(el);
+    if (i && i.label !== null) return i.label;
+    let t = "";
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (t.length < LIMITS.labelChars) {
+      const n = w.nextNode();
+      if (!n) break;
+      const s = n.nodeValue.replace(/\s+/g, " ").trim();
+      if (s) t += (t ? " " : "") + s;
+    }
+    const cut = t.length > LIMITS.labelChars;
+    t = t.slice(0, LIMITS.labelChars).replace(/[`#*_[\]>]/g, "");
+    const out = `<${el.tagName.toLowerCase()}>${t ? ` "${t}${cut ? "..." : ""}"` : ""}`;
+    if (i) i.label = out;
+    return out;
   };
-  // siblings are comparable when they are the same kind of thing: same tag, or same first class
-  const sameKind = (items) => {
-    const tags = new Set(items.map((x) => x.tagName));
-    if (tags.size === 1) return true;
-    const cls = new Set(items.map((x) => x.classList[0] || ""));
-    return cls.size === 1 && !cls.has("");
+  const kinds = (els) => sameKind(els.map((x) => x.tagName), els.map((x) => x.classList[0] || ""));
+  // group siblings into rows: sort by top once, then sweep
+  const groupRows = (kids) => {
+    const sorted = kids.map((el) => ({ el, r: rectOf(el) })).sort((a, b) => a.r.top - b.r.top || a.r.left - b.r.left);
+    const rows = [];
+    for (const it of sorted) {
+      const last = rows[rows.length - 1];
+      if (last && same(last.top, it.r.top)) last.items.push(it); else rows.push({ top: it.r.top, items: [it] });
+    }
+    for (const row of rows) row.items.sort((a, b) => a.r.left - b.r.left);
+    return rows;
   };
-  // a centered layout: every child's center sits on the parent's center
+  // a centered layout: children are centered on the parent and do not stretch across it
   const centered = (el, items) => {
-    const c = rectOf(el); const mid = c.left + c.width / 2;
-    const cs = getComputedStyle(el);
-    if (cs.textAlign === "center" || cs.alignItems === "center" || cs.justifyContent === "center") return true;
-    // stretched blocks (as wide as the parent's content box) are aligned, not centered
+    const { r: c, cs } = get(el);
+    const flex = cs.display.includes("flex");
+    const column = cs.flexDirection.startsWith("column");
+    if (flex && column && cs.alignItems === "center") return true;
+    if (flex && !column && cs.justifyContent === "center") return true;
     const inner = c.width - px(cs.paddingLeft) - px(cs.paddingRight);
     const stretched = items.filter((x) => x.r.width >= inner - TOL * 2).length;
     if (stretched >= items.length / 2) return false;
+    const mid = c.left + c.width / 2;
     return items.every((x) => Math.abs(x.r.left + x.r.width / 2 - mid) <= TOL + 1);
   };
-  const groupRows = (kids) => {
-    const rows = [];
-    for (const k of kids) {
-      const r = rectOf(k);
-      const row = rows.find((row) => same(row.top, r.top));
-      if (row) row.items.push({ el: k, r }); else rows.push({ top: r.top, items: [{ el: k, r }] });
-    }
-    return rows.map((row) => ({ ...row, items: row.items.sort((a, b) => a.r.left - b.r.left) }));
+  // inline text runs (a paragraph with links) are not a layout row
+  const isInlineRun = (el, items) => {
+    const cs = get(el).cs;
+    if (cs.display.includes("flex") || cs.display.includes("grid")) return false;
+    for (const n of el.childNodes) if (n.nodeType === 3 && n.nodeValue.trim()) return true;
+    return items.some((x) => get(x.el).cs.display.startsWith("inline"));
   };
+  const hGuide = (x1, x2, y, v, bad) => ({ kind: "h", x1, x2, y, text: `${v}px`, bad });
+  const vGuide = (y1, y2, x, text, bad) => ({ kind: "v", y1, y2, x, text, bad });
+  const edgeGuide = (x, y1, y2, text, bad) => ({ kind: "edge", x, y1, y2, text, bad });
 
   // ---------- analysis ----------
   const issues = [];
-  const add = (issue) => { if (issues.length < MAX_ISSUES) issues.push(issue); };
-  const severityFor = (diff) => (diff >= 8 ? "high" : diff >= 3 ? "medium" : "low");
+  const add = (issue) => { issue.r = rectOf(issue.el); issues.push(issue); };
 
-  const all = [...document.body.querySelectorAll("*")].filter(isVisible);
-
-  // 1 + 2: gaps between siblings, and left/right edge alignment of stacked siblings
   for (const el of all) {
     const kids = kidsOf(el);
     if (kids.length < 2) continue;
     const rows = groupRows(kids);
-    const guides = [];
 
-    // horizontal gaps inside each row
+    // 1a: horizontal gaps inside each row
     for (const row of rows) {
-      if (row.items.length < 3 || !sameKind(row.items.map((x) => x.el))) continue;
+      if (row.items.length < 3 || !kinds(row.items.map((x) => x.el)) || isInlineRun(el, row.items)) continue;
       const gaps = [];
       for (let i = 1; i < row.items.length; i++) {
         const a = row.items[i - 1].r, b = row.items[i].r;
         gaps.push({ v: Math.round(b.left - a.right), x1: a.right, x2: b.left, y: (Math.max(a.top, b.top) + Math.min(a.bottom, b.bottom)) / 2 });
       }
-      const vals = gaps.map((g) => g.v);
-      if (vals.some((v) => v < 0)) continue;
-      const exp = mode(vals);
-      const diff = Math.max(...vals) - Math.min(...vals);
+      if (gaps.some((g) => g.v < 0)) continue;
+      const { exp, diff, off } = outliers(gaps.map((g) => g.v));
       if (diff > TOL) {
-        const g2 = gaps.map((g) => ({ kind: "h", x1: g.x1, x2: g.x2, y: g.y, text: `${g.v}px`, bad: !same(g.v, exp) }));
         add({ type: "gaps", severity: severityFor(diff), el, title: `Uneven horizontal gaps in ${label(el)}`,
-          detail: `${row.items.length} items in a row, gaps ${vals.join(", ")}px (most are ${exp}px)`,
-          expected: `${exp}px between every item`, guides: g2 });
+          detail: `${row.items.length} items in a row, gaps ${gaps.map((g) => g.v).join(", ")}px (most are ${exp}px)`,
+          expected: `${exp}px between every item`,
+          guides: gaps.map((g, i) => hGuide(g.x1, g.x2, g.y, g.v, off.includes(i))) });
       }
     }
 
-    // vertical gaps between rows (stacked blocks or grid rows)
-    if (rows.length >= 3 && sameKind(kids)) {
+    // 1b: vertical gaps between rows
+    if (rows.length >= 3 && kinds(kids)) {
       const gaps = [];
       for (let i = 1; i < rows.length; i++) {
         const prev = rows[i - 1], cur = rows[i];
-        const prevBottom = Math.max(...prev.items.map((x) => x.r.bottom));
-        const curTop = Math.min(...cur.items.map((x) => x.r.top));
-        const left = Math.min(...cur.items.map((x) => x.r.left));
-        const right = Math.max(...cur.items.map((x) => x.r.right));
+        let prevBottom = -Infinity, curTop = Infinity, left = Infinity, right = -Infinity;
+        for (const x of prev.items) if (x.r.bottom > prevBottom) prevBottom = x.r.bottom;
+        for (const x of cur.items) { if (x.r.top < curTop) curTop = x.r.top; if (x.r.left < left) left = x.r.left; if (x.r.right > right) right = x.r.right; }
         gaps.push({ v: Math.round(curTop - prevBottom), y1: prevBottom, y2: curTop, x: (left + right) / 2 });
       }
-      const vals = gaps.map((g) => g.v);
-      if (!vals.some((v) => v < 0)) {
-        const exp = mode(vals);
-        const diff = Math.max(...vals) - Math.min(...vals);
+      if (!gaps.some((g) => g.v < 0)) {
+        const { exp, diff, off } = outliers(gaps.map((g) => g.v));
         if (diff > TOL) {
           add({ type: "gaps", severity: severityFor(diff), el, title: `Uneven vertical gaps in ${label(el)}`,
-            detail: `${rows.length} stacked blocks, gaps ${vals.join(", ")}px (most are ${exp}px)`,
+            detail: `${rows.length} stacked blocks, gaps ${gaps.map((g) => g.v).join(", ")}px (most are ${exp}px)`,
             expected: `${exp}px between every block`,
-            guides: gaps.map((g) => ({ kind: "v", y1: g.y1, y2: g.y2, x: g.x, text: `${g.v}px`, bad: !same(g.v, exp) })) });
+            guides: gaps.map((g, i) => vGuide(g.y1, g.y2, g.x, `${g.v}px`, off.includes(i))) });
         }
       }
     }
 
-    // left and right edge alignment of stacked siblings (1 per row)
-    if (rows.length >= 2 && rows.every((r) => r.items.length === 1) && sameKind(kids) && !centered(el, rows.map((r) => r.items[0]))) {
+    // 2: left and right edge alignment of stacked siblings
+    if (rows.length >= 2 && rows.every((r) => r.items.length === 1) && kinds(kids)) {
       const items = rows.map((r) => r.items[0]);
-      for (const side of ["left", "right"]) {
-        const vals = items.map((x) => Math.round(x.r[side]));
-        const exp = mode(vals);
-        const off = items.filter((x, i) => !same(vals[i], exp));
-        if (off.length && off.length < items.length) {
-          for (const o of off) {
-            const d = Math.round(o.r[side] - exp);
-            const top = Math.min(...items.map((x) => x.r.top)), bottom = Math.max(...items.map((x) => x.r.bottom));
+      if (!centered(el, items)) {
+        let top = Infinity, bottom = -Infinity;
+        for (const x of items) { if (x.r.top < top) top = x.r.top; if (x.r.bottom > bottom) bottom = x.r.bottom; }
+        for (const side of ["left", "right"]) {
+          const vals = items.map((x) => Math.round(x.r[side]));
+          const { exp, off } = outliers(vals);
+          if (!off.length || off.length === items.length) continue;
+          for (const idx of off) {
+            const o = items[idx], d = vals[idx] - exp;
             add({ type: "align", severity: severityFor(Math.abs(d)), el: o.el,
               title: `${side === "left" ? "Left" : "Right"} edge off by ${Math.abs(d)}px: ${label(o.el)}`,
-              detail: `${side} edge sits at ${Math.round(o.r[side])}px, its siblings in ${label(el)} sit at ${exp}px`,
+              detail: `${side} edge sits at ${vals[idx]}px, its siblings in ${label(el)} sit at ${exp}px`,
               expected: `${side} edge at ${exp}px like its siblings`,
-              guides: [
-                { kind: "edge", x: exp, y1: top, y2: bottom, text: `${exp}px`, bad: false },
-                { kind: "edge", x: o.r[side], y1: o.r.top, y2: o.r.bottom, text: `${Math.round(o.r[side])}px (${d > 0 ? "+" : ""}${d})`, bad: true },
-              ] });
+              guides: [edgeGuide(exp, top, bottom, `${exp}px`, false), edgeGuide(o.r[side], o.r.top, o.r.bottom, `${vals[idx]}px (${d > 0 ? "+" : ""}${d})`, true)] });
           }
         }
       }
     }
-    void guides;
   }
 
-  // 3: asymmetric padding on containers
+  // 3: asymmetric padding on containers (sections belong to the rhythm check)
   for (const el of all) {
-    if (el.tagName === "SECTION" || kidsOf(el).length === 0) continue; // sections belong to the rhythm check
-    const cs = getComputedStyle(el);
-    const r = rectOf(el);
-    if (r.width < 160 || r.height < 40) continue;
+    if (el.tagName === "SECTION" || kidsOf(el).length === 0) continue;
+    const { cs, r } = get(el);
+    if (r.width < LIMITS.minPadW || r.height < LIMITS.minPadH) continue;
     const pl = px(cs.paddingLeft), pr = px(cs.paddingRight), pt = px(cs.paddingTop), pb = px(cs.paddingBottom);
     const guides = [], bits = [];
     if (!same(pl, pr) && Math.max(pl, pr) > 0) {
       bits.push(`left ${pl}px vs right ${pr}px`);
-      guides.push({ kind: "h", x1: r.left, x2: r.left + pl, y: r.top + r.height / 2, text: `${pl}px`, bad: pl !== Math.min(pl, pr) || true });
-      guides.push({ kind: "h", x1: r.right - pr, x2: r.right, y: r.top + r.height / 2, text: `${pr}px`, bad: true });
+      guides.push(hGuide(r.left, r.left + pl, r.top + r.height / 2, pl, pl > pr), hGuide(r.right - pr, r.right, r.top + r.height / 2, pr, pr > pl));
     }
-    if (!same(pt, pb) && Math.max(pt, pb) > 0 && r.height >= 80) {
+    if (!same(pt, pb) && Math.max(pt, pb) > 0 && r.height >= LIMITS.minPadHVertical) {
       bits.push(`top ${pt}px vs bottom ${pb}px`);
-      guides.push({ kind: "v", y1: r.top, y2: r.top + pt, x: r.left + r.width / 2, text: `${pt}px`, bad: true });
-      guides.push({ kind: "v", y1: r.bottom - pb, y2: r.bottom, x: r.left + r.width / 2, text: `${pb}px`, bad: true });
+      guides.push(vGuide(r.top, r.top + pt, r.left + r.width / 2, `${pt}px`, pt > pb), vGuide(r.bottom - pb, r.bottom, r.left + r.width / 2, `${pb}px`, pb > pt));
     }
     if (bits.length) {
       const diff = Math.max(Math.abs(pl - pr), Math.abs(pt - pb));
-      add({ type: "padding", severity: diff >= 8 ? "medium" : "low", el, title: `Asymmetric padding on ${label(el)}`,
+      const sev = severityFor(diff);
+      add({ type: "padding", severity: sev === "high" ? "medium" : sev, el, title: `Asymmetric padding on ${label(el)}`,
         detail: bits.join("; "), expected: "equal padding on opposite sides unless the asymmetry is deliberate", guides });
     }
   }
 
   // 4: section rhythm - top/bottom padding and content inset across page sections
-  const sections = all.filter((el) => el.tagName === "SECTION" && rectOf(el).width >= innerWidth * 0.6 && rectOf(el).height >= 120);
+  const sections = all.filter((el) => el.tagName === "SECTION" && get(el).r.width >= innerWidth * LIMITS.sectionWidthRatio && get(el).r.height >= LIMITS.minSectionH);
   if (sections.length >= 2) {
-    const pads = sections.map((s) => {
-      const cs = getComputedStyle(s);
-      return { el: s, r: rectOf(s), pt: px(cs.paddingTop), pb: px(cs.paddingBottom) };
-    });
+    const pads = sections.map((s) => { const { cs, r } = get(s); return { el: s, r, pt: px(cs.paddingTop), pb: px(cs.paddingBottom) }; });
     for (const side of ["pt", "pb"]) {
       const vals = pads.map((p) => p[side]);
-      const exp = mode(vals);
-      const off = pads.filter((p) => !same(p[side], exp));
-      if (off.length && off.length < pads.length) {
-        for (const o of off) {
-          add({ type: "rhythm", severity: severityFor(Math.abs(o[side] - exp)), el: o.el,
-            title: `Section ${side === "pt" ? "top" : "bottom"} padding ${o[side]}px, others use ${exp}px`,
-            detail: `${label(o.el)} breaks the vertical rhythm shared by ${pads.length - off.length} other sections`,
-            expected: `${side === "pt" ? "padding-top" : "padding-bottom"}: ${exp}px`,
-            guides: [{ kind: "v", y1: side === "pt" ? o.r.top : o.r.bottom - o[side], y2: side === "pt" ? o.r.top + o[side] : o.r.bottom, x: o.r.left + o.r.width / 2, text: `${o[side]}px (expected ${exp})`, bad: true }] });
-        }
+      const { exp, off } = outliers(vals);
+      if (!off.length || off.length === pads.length) continue;
+      for (const idx of off) {
+        const o = pads[idx];
+        const y1 = side === "pt" ? o.r.top : o.r.bottom - o[side], y2 = side === "pt" ? o.r.top + o[side] : o.r.bottom;
+        add({ type: "rhythm", severity: severityFor(Math.abs(o[side] - exp)), el: o.el,
+          title: `Section ${side === "pt" ? "top" : "bottom"} padding ${o[side]}px, others use ${exp}px`,
+          detail: `${label(o.el)} breaks the vertical rhythm shared by ${pads.length - off.length} other sections`,
+          expected: `${side === "pt" ? "padding-top" : "padding-bottom"}: ${exp}px`,
+          guides: [vGuide(y1, y2, o.r.left + o.r.width / 2, `${o[side]}px (expected ${exp})`, true)] });
       }
     }
     // where content really starts: walk down the first visible child until the left edge moves inward
     const contentStart = (section) => {
-      let cur = section, left = rectOf(section).left, found = null;
-      for (let depth = 0; depth < 8; depth++) {
-        const kid = kidsOf(cur)[0];
-        if (!kid) break;
-        const kl = rectOf(kid).left;
-        if (kl - left > TOL) { found = kid; break; }
+      let cur = section;
+      const left = get(section).r.left;
+      for (let depth = 0; depth < LIMITS.contentDepth; depth++) {
+        let kid = null;
+        for (const c of cur.children) { const ci = get(c); if (ci && ci.visible && ci.inFlow) { kid = c; break; } }
+        if (!kid) return null;
+        if (get(kid).r.left - left > TOL) return kid;
         cur = kid;
       }
-      return found;
+      return null;
     };
-    const insets = pads.map((p) => {
-      const first = contentStart(p.el);
-      return first ? { ...p, inset: Math.round(rectOf(first).left - p.r.left), first } : null;
-    }).filter(Boolean);
+    const insets = pads.map((p) => { const first = contentStart(p.el); return first ? { ...p, inset: Math.round(get(first).r.left - p.r.left), first } : null; }).filter(Boolean);
     if (insets.length >= 2) {
-      const vals = insets.map((i) => i.inset);
-      const exp = mode(vals);
-      const off = insets.filter((i) => !same(i.inset, exp));
+      const { exp, off } = outliers(insets.map((i) => i.inset));
       if (off.length && off.length < insets.length) {
-        for (const o of off) {
-          const fr = rectOf(o.first);
+        for (const idx of off) {
+          const o = insets[idx], fr = get(o.first).r;
           add({ type: "rhythm", severity: severityFor(Math.abs(o.inset - exp)), el: o.first,
             title: `Content inset ${o.inset}px in ${label(o.el)}, other sections use ${exp}px`,
             detail: `the first block starts ${o.inset}px from the section's left edge`,
             expected: `${exp}px inset like the other sections`,
-            guides: [
-              { kind: "edge", x: o.r.left + exp, y1: fr.top, y2: fr.bottom, text: `${exp}px`, bad: false },
-              { kind: "edge", x: fr.left, y1: fr.top, y2: fr.bottom, text: `${o.inset}px`, bad: true },
-            ] });
+            guides: [edgeGuide(o.r.left + exp, fr.top, fr.bottom, `${exp}px`, false), edgeGuide(fr.left, fr.top, fr.bottom, `${o.inset}px`, true)] });
         }
       }
     }
   }
 
+  // sort by severity first, then cap, so the cap only ever drops the least severe
   const order = { high: 0, medium: 1, low: 2 };
   issues.sort((a, b) => order[a.severity] - order[b.severity]);
+  const total = issues.length;
+  const dropped = Math.max(0, total - LIMITS.maxIssues);
+  issues.length = Math.min(total, LIMITS.maxIssues);
   issues.forEach((i, n) => { i.n = n + 1; i.selector = selector(i.el); });
 
   // ---------- report ----------
+  const pageId = location.protocol === "file:" ? `file://${location.pathname}` : `${location.origin}${location.pathname}`;
   const report = () => {
     const counts = { high: 0, medium: 0, low: 0 };
     issues.forEach((i) => counts[i.severity]++);
     const lines = [
-      `# Snake Eyes spacing report`,
-      ``,
-      `- Page: ${location.href}`,
+      `# Snake Eyes spacing report`, ``,
+      `- Page: ${pageId}`,
       `- Viewport: ${innerWidth}x${innerHeight}`,
       `- Date: ${new Date().toISOString().slice(0, 10)}`,
-      `- Issues: ${issues.length} (${counts.high} high, ${counts.medium} medium, ${counts.low} low)`,
-      ``,
-      `Fix each item below in the source, then re-run Snake Eyes to confirm 0 issues. Selectors are relative to <body>.`,
-      ``,
+      `- Issues: ${issues.length}${dropped ? ` shown of ${total}` : ""} (${counts.high} high, ${counts.medium} medium, ${counts.low} low)`,
     ];
-    for (const i of issues) {
-      lines.push(`## ${i.n}. ${i.title} (${i.severity})`, `- Selector: \`${i.selector}\``, `- Found: ${i.detail}`, `- Expected: ${i.expected}`, ``);
-    }
+    if (dropped) lines.push(`- Note: capped at ${LIMITS.maxIssues}; fix these, then re-run for the remaining ${dropped}`);
+    if (scanTruncated) lines.push(`- Note: scan stopped after ${LIMITS.maxNodes} elements; the page is larger than that`);
+    lines.push(``, `Fix each item below in the source, then re-run Snake Eyes to confirm 0 issues. Selectors are relative to <body>.`, ``);
+    for (const i of issues) lines.push(`## ${i.n}. ${i.title} (${i.severity})`, `- Selector: \`${i.selector}\``, `- Found: ${i.detail}`, `- Expected: ${i.expected}`, ``);
     if (!issues.length) lines.push(`No spacing issues found at this viewport.`);
     return lines.join("\n");
   };
 
   // ---------- UI ----------
+  const ac = new AbortController();
+  const on = (target, type, fn) => target.addEventListener(type, fn, { signal: ac.signal });
   const root = document.createElement("div");
   root.id = ROOT_ID;
-  document.documentElement.appendChild(root);
-  const shadow = root.attachShadow({ mode: "open" });
-  const style = document.createElement("style");
-  style.textContent = window.__SNAKE_EYES_CSS__ || "";
-  shadow.appendChild(style);
+  root.setAttribute(MARK, "1");
+  const shadow = root.attachShadow({ mode: "closed" });
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(window.__SNAKE_EYES_CSS__ || "");
+  shadow.adoptedStyleSheets = [sheet];
+  delete window.__SNAKE_EYES_CSS__;
 
   const layer = document.createElement("div");
   layer.className = "snk-layer";
@@ -301,37 +315,44 @@
   sizeLayer();
   shadow.appendChild(layer);
 
+  const TYPE_LABEL = { gaps: "Gap", align: "Edge", padding: "Padding", rhythm: "Rhythm" };
+  const countText = dropped ? `${issues.length} of ${total} issues` : `${issues.length} issue${issues.length === 1 ? "" : "s"}`;
   const panel = document.createElement("aside");
   panel.className = "snk-panel";
+  panel.setAttribute("aria-label", "Snake Eyes spacing issues");
   panel.innerHTML = `
     <header class="snk-head">
       <span class="snk-logo" aria-hidden="true"><i></i><i></i></span>
-      <b>Snake Eyes</b>
-      <span class="snk-count">${issues.length} issue${issues.length === 1 ? "" : "s"}</span>
-      <button class="snk-btn snk-all" title="Draw every guide at once">Show all</button>
-      <button class="snk-btn snk-copy" title="Copy the report for an agent">Copy report</button>
-      <button class="snk-x" title="Close (or click the icon again)" aria-label="Close">x</button>
+      <h2 class="snk-title-h">Snake Eyes</h2>
+      <span class="snk-count${issues.length ? "" : " snk-count-ok"}"></span>
+      <button class="snk-btn snk-all" type="button" title="Draw every guide at once">Show all</button>
+      <button class="snk-btn snk-copy" type="button" title="Copy the report for an agent">Copy report</button>
+      <button class="snk-icon snk-collapse" type="button" title="Collapse the panel" aria-label="Collapse"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <button class="snk-icon snk-x" type="button" title="Close (Esc)" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </header>
     <ol class="snk-list"></ol>
-    <footer class="snk-foot">Click an issue to jump to it. Red = off, green = the value the siblings agree on.</footer>`;
+    <footer class="snk-foot"><span class="snk-legend">Click an issue to jump to it. Red = off, green = the value the siblings agree on.</span><span class="snk-stale" hidden>Viewport changed. Click the icon to re-scan.</span></footer>`;
+  panel.querySelector(".snk-count").textContent = countText;
   shadow.appendChild(panel);
   const list = panel.querySelector(".snk-list");
-  const TYPE_LABEL = { gaps: "Gap", align: "Edge", padding: "Padding", rhythm: "Rhythm" };
   for (const i of issues) {
     const li = document.createElement("li");
-    li.className = `snk-item snk-${i.severity}`;
-    li.dataset.n = i.n;
-    li.innerHTML = `<span class="snk-n">${i.n}</span><span class="snk-tag">${TYPE_LABEL[i.type]}</span><span class="snk-title"></span><span class="snk-detail"></span>`;
-    li.querySelector(".snk-title").textContent = i.title;
-    li.querySelector(".snk-detail").textContent = i.detail;
-    li.addEventListener("click", () => activate(i));
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `snk-item snk-${i.severity}`;
+    btn.dataset.n = i.n;
+    btn.innerHTML = `<span class="snk-n">${i.n}</span><span class="snk-tag">${TYPE_LABEL[i.type]}</span><span class="snk-title"></span><span class="snk-detail"></span>`;
+    btn.querySelector(".snk-title").textContent = i.title;
+    btn.querySelector(".snk-detail").textContent = i.detail;
+    on(btn, "click", () => activate(i));
+    li.appendChild(btn);
     list.appendChild(li);
   }
   if (!issues.length) list.innerHTML = `<li class="snk-empty">No spacing issues at this viewport. Resize and click the icon again to test another width.</li>`;
 
-  const clearGuides = () => { layer.innerHTML = ""; };
-  const drawGuide = (g) => {
-    const mk = (cls, css) => { const d = document.createElement("div"); d.className = cls; Object.assign(d.style, css); layer.appendChild(d); return d; };
+  const clearGuides = () => { layer.replaceChildren(); };
+  const guideNodes = (g, frag) => {
+    const mk = (cls, css) => { const d = document.createElement("div"); d.className = cls; Object.assign(d.style, css); frag.appendChild(d); return d; };
     const tone = g.bad ? "snk-bad" : "snk-ok";
     if (g.kind === "h") {
       mk(`snk-line snk-hline ${tone}`, { left: `${g.x1}px`, top: `${g.y}px`, width: `${Math.max(1, g.x2 - g.x1)}px` });
@@ -341,38 +362,69 @@
       mk(`snk-badge ${tone}`, { left: `${g.x}px`, top: `${(g.y1 + g.y2) / 2}px` }).textContent = g.text;
     } else if (g.kind === "edge") {
       mk(`snk-line snk-vline snk-edge ${tone}`, { left: `${g.x}px`, top: `${g.y1 - 12}px`, height: `${g.y2 - g.y1 + 24}px` });
-      mk(`snk-badge ${tone}`, { left: `${g.x}px`, top: `${g.y1 - 12}px` }).textContent = g.text;
+      // expected badge above the box, actual badge below it, so 2 close edges never overlap
+      mk(`snk-badge ${tone}`, { left: `${g.x}px`, top: `${g.bad ? g.y2 + 12 : g.y1 - 12}px` }).textContent = g.text;
     }
   };
-  const highlight = (el, active) => {
-    const r = rectOf(el);
+  const boxNode = (r, active, frag) => {
     const d = document.createElement("div");
     d.className = `snk-box${active ? " snk-active" : ""}`;
     Object.assign(d.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
-    layer.appendChild(d);
+    frag.appendChild(d);
+  };
+  // read nothing from the page here: rects were stored at analysis time, so this is 1 write
+  const draw = (items, activeIssue) => {
+    clearGuides(); sizeLayer();
+    const frag = document.createDocumentFragment();
+    for (const i of items) {
+      boxNode(i.r, i === activeIssue, frag);
+      const gs = items.length === 1 ? i.guides : i.guides.filter((g, idx) => g.bad || idx < LIMITS.guideCap);
+      gs.forEach((g) => guideNodes(g, frag));
+    }
+    layer.appendChild(frag);
   };
   const activate = (i) => {
-    clearGuides();
-    sizeLayer();
-    highlight(i.el, true);
-    i.guides.forEach(drawGuide);
-    list.querySelectorAll(".snk-item").forEach((li) => li.classList.toggle("snk-current", li.dataset.n === String(i.n)));
-    i.el.scrollIntoView({ block: "center", behavior: "smooth" });
+    draw([i], i);
+    list.querySelectorAll(".snk-item").forEach((b) => b.classList.toggle("snk-current", b.dataset.n === String(i.n)));
+    i.el.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
   };
-  panel.querySelector(".snk-all").addEventListener("click", () => {
-    clearGuides(); sizeLayer();
-    issues.forEach((i) => { highlight(i.el, false); i.guides.forEach(drawGuide); });
-    list.querySelectorAll(".snk-item").forEach((li) => li.classList.remove("snk-current"));
+  on(panel.querySelector(".snk-all"), "click", () => {
+    draw(issues, null);
+    list.querySelectorAll(".snk-item").forEach((b) => b.classList.remove("snk-current"));
   });
-  panel.querySelector(".snk-copy").addEventListener("click", async (ev) => {
+  on(panel.querySelector(".snk-copy"), "click", async (ev) => {
     const btn = ev.currentTarget;
+    if (!ev.isTrusted && !window.__snakeEyesTest) return; // only a real click may write the clipboard
     try { await navigator.clipboard.writeText(report()); btn.textContent = "Copied"; }
     catch { btn.textContent = "Copy failed"; }
     setTimeout(() => { btn.textContent = "Copy report"; }, 1600);
   });
-  panel.querySelector(".snk-x").addEventListener("click", () => { root.remove(); delete window.__snakeEyes; });
-  addEventListener("resize", clearGuides);
+  on(panel.querySelector(".snk-collapse"), "click", () => { panel.classList.toggle("snk-collapsed"); });
 
+  const close = () => { ac.abort(); root.remove(); delete window.__snakeEyes; };
+  root.__snkClose = close;
+  on(panel.querySelector(".snk-x"), "click", close);
+  on(document, "keydown", (e) => { if (e.key === "Escape") close(); });
+  let resizeTimer = 0;
+  on(window, "resize", () => {
+    clearGuides();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      panel.querySelector(".snk-stale").hidden = false;
+      panel.querySelector(".snk-legend").hidden = true;
+      list.querySelectorAll(".snk-item").forEach((b) => { b.disabled = true; });
+    }, 150);
+  });
+
+  document.documentElement.appendChild(root);
   if (issues.length) activate(issues[0]);
-  window.__snakeEyes = { issues: issues.map(({ el, guides, ...rest }) => ({ ...rest, guides: guides.length })), report };
+
+  window.__snakeEyes = {
+    ready: true,
+    issues: issues.map(({ el: _el, guides, r, ...rest }) => ({ ...rest, guides: guides.length, box: r })),
+    elements: issues.map((i) => i.el),
+    total, dropped, scanTruncated, nodesSeen,
+    report, shadow, close,
+  };
+  return false;
 })();

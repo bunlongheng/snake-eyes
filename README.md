@@ -13,9 +13,9 @@ A Chrome extension that looks at the page you are on the way a picky designer do
 
 1. Clone or download this repo.
 2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, pick the folder.
-3. Pin the icon. Click it on any page to audit, click again to clear.
+3. Pin the icon. Click it on any page to audit, click again to clear. Keyboard: `Alt+Shift+S` (change it at `chrome://extensions/shortcuts`).
 
-Nothing runs until you click. The extension asks only for `activeTab`, `scripting` and `clipboardWrite`.
+Nothing runs until you click. The extension asks only for `activeTab` and `scripting`, so it can only touch the tab you clicked on, and only then. To audit a local `file://` page, enable **Allow access to file URLs** on the extension's details page.
 
 ## What it catches
 
@@ -30,49 +30,73 @@ Everything is measured from the rendered layout at the current viewport, toleran
 
 ## The panel
 
-- Issues sorted high to low. High is 8px or more off, medium 3 to 7, low under 3.
-- Click an issue: the page scrolls to it, the element gets a red outline and its guides appear.
-- **Show all** draws every guide at once. **Copy report** puts the markdown below on the clipboard.
+- Issues sorted high to low. High is 8px or more off, medium 3 to 7, low under 3. The list caps at 150, most severe first, and says so.
+- Click an issue (or Tab to it and press Enter): the page scrolls to it, the element gets a red outline and its guides appear.
+- **Show all** draws every guide at once. **Copy report** puts the markdown below on the clipboard. `Esc` closes.
+- On a phone-sized window the panel becomes a bottom sheet. It follows your light or dark theme.
+- Resize the window and the guides clear; click the icon again to re-scan at the new width.
 
 ## The report
 
 ```markdown
 # Snake Eyes spacing report
 
-- Page: https://example.dev/
-- Viewport: 1440x900
-- Issues: 7 (2 high, 3 medium, 2 low)
+- Page: https://example.dev/pricing
+- Viewport: 1280x900
+- Date: 2026-09-11
+- Issues: 6 (3 high, 2 medium, 1 low)
+
+Fix each item below in the source, then re-run Snake Eyes to confirm 0 issues. Selectors are relative to <body>.
 
 ## 1. Uneven horizontal gaps in <div> (high)
 - Selector: `section#features > div.wrap > div.cards`
 - Found: 4 items in a row, gaps 24, 24, 31px (most are 24px)
 - Expected: 24px between every item
+
+## 2. Section top padding 48px, others use 64px (high)
+- Selector: `section#hero`
+- Found: <section> "Hero Section with 48px top..." breaks the vertical rhythm shared by 6 other sections
+- Expected: padding-top: 64px
 ```
 
-Paste it to your coding agent as is: every item has a selector, what was found, and what was expected.
+Paste it to your coding agent as is: every item has a selector, what was found, and what was expected. The report carries the page origin and path only, never the query string or fragment.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    C[Click icon] --> I[background.js injects overlay.css + overlay.js into the tab]
-    I --> S[Scan every visible element: rects, computed padding, sibling rows]
-    S --> R[4 checks produce issues with guides and a selector]
-    R --> U[Shadow-root panel + document-sized guide layer]
-    U --> P[Copy report -> clipboard markdown]
+    C[Click the icon] --> I[background.js injects lib/pure.js + overlay.js into the tab]
+    I --> S[1 pass over the DOM: rect + computed style per element, then 4 checks]
+    S --> U[Closed shadow root: side panel + a page-sized guide layer]
 ```
 
-The overlay lives in a shadow root under `#snake-eyes-root`, so page CSS cannot restyle it and it cannot restyle the page. The page DOM is never modified.
+| File | Role |
+|------|------|
+| `background.js` | The only thing that runs on install. Listens for the click, injects, and cleans up on toggle-off. |
+| `lib/pure.js` | The math with no DOM: tolerance, severity bands, majority value, outliers, sibling kinds. Unit tested. |
+| `overlay.js` | 1 scan of the page (capped at 8000 elements), the 4 checks, the report, the panel. |
+| `panel.css` | The panel and guides, loaded into the shadow root as a constructed stylesheet. |
+| `overlay.css` | 1 rule for the host element so page CSS cannot hide or re-stack it. |
+
+The overlay adds 1 element to the page, `#snake-eyes-root`, with a closed shadow root inside. Page CSS cannot restyle it, page script cannot reach into it, and it never edits your DOM. Clicking again removes it and the 1 injected rule.
+
+## Privacy
+
+- Nothing runs until you click. There is no background scanning, no content script on page load.
+- Nothing leaves the browser. No network requests, no storage, no analytics.
+- The report you copy contains the page's origin and path, your viewport size, element selectors and short text labels. That is all.
 
 ## Tests
 
 ```bash
 npm install
-npm test     # headless Chromium: injects the overlay into tests/fixture.html, checks all 6 planted mistakes are found, the panel works, the report copies
-npm run lint
+npx playwright install chromium   # once
+npm test          # unit tests for lib/pure.js, then headless Chromium against 3 pages at 3 widths
+npm run lint      # eslint, zero warnings
+npm run hero      # refresh docs/hero.png from the fixture
 ```
 
-`tests/fixture.html` plants 1 mistake per check. CI runs the same on every push.
+`tests/fixture.html` plants exactly 1 mistake per check (6 in all) next to prose with inline links and deep nesting that must not be flagged. The browser test asserts exactly those 6 come back, that every selector resolves to its element, that the panel works by mouse and keyboard, that `tests/clean.html` yields 0 issues, and that a 200-issue page is capped at 150 most severe first. CI runs the same on every push on Node 22 with pinned actions. A `v*` tag runs the suite again and attaches a zip of the extension to the GitHub release.
 
 ## Decisions
 
@@ -83,6 +107,8 @@ npm run lint
 | 2px tolerance | Subpixel rounding and borders create 1px noise. 3px is where a human starts to notice. |
 | Report first, pictures second | The clipboard report is the product. Guides exist so you can trust the report before pasting it. |
 | No background scanning | It only runs when clicked. A spacing audit on every page load would be noise and a privacy problem. |
+| Prose is not a layout | A paragraph with links has uneven "gaps" by nature. Text runs and centered stacks are skipped, not reported. |
+| Cap after sort | When a page has more than 150 issues, the 150 kept are the worst ones, and the report says how many were left. |
 
 ## Author
 

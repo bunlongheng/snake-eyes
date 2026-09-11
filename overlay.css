@@ -1,4 +1,4 @@
-/* Snake Eyes overlay. Injected into the page, but every rule below targets the shadow root
-   inside #snake-eyes-root, so page styles never bleed in and ours never bleed out. The
-   text of this file is also handed to the shadow root by background.js. */
-#snake-eyes-root { all: initial; position: absolute; top: 0; left: 0; z-index: 2147483646; }
+/* Page-level host element only. Everything else lives inside the closed shadow root and is
+   styled by panel.css, which background.js hands to overlay.js as text. The !important keeps
+   a page stylesheet from hiding or re-stacking the overlay. */
+#snake-eyes-root { all: initial !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: 2147483646 !important; display: block !important; }
