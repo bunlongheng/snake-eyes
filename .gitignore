@@ -2,3 +2,5 @@ node_modules/
 tests/screenshots/*.png
 .DS_Store
 *.zip
+.env
+.env.*
