@@ -271,6 +271,25 @@ check(empty.empty && empty.ok, "clean page shows the empty state with a green co
 check(/No spacing issues found/.test(c.report), "clean page report says so");
 await clean.close();
 
+// ---------- the branches fixture.html cannot reach ----------
+const other = await context.newPage();
+await other.goto("file://" + join(here, "fixture2.html"));
+const o = await inject(other);
+const otext = o.issues.map((i) => `${i.title} | ${i.detail}`).join("\n");
+check(o.issues.length === 3, `fixture2: exactly the 3 planted issues (found ${o.issues.length})`);
+check(/Right edge off by 6px/.test(otext), "right edge: the item that stops 6px short");
+check(/top 16px vs bottom 24px/.test(otext), "padding: top against bottom on a tall container");
+check(/Section bottom padding 24px, others use 56px/.test(otext), "rhythm: the section that ends early");
+await other.close();
+
+// ---------- a page past the node budget says so ----------
+const huge = await context.newPage();
+await huge.setContent(`<!doctype html><html><body style="margin:0">${"<div><span>x</span></div>".repeat(6000)}</body></html>`);
+const h = await inject(huge);
+check(await huge.evaluate(() => window.__snakeEyes.scanTruncated === true && window.__snakeEyes.nodesSeen > 8000), "a page past the 8000-element budget stops scanning and records it");
+check(/scan stopped after 8000 elements/.test(h.report), "the report warns that the page was larger than the budget");
+await huge.close();
+
 // ---------- cap: 200 uneven rows keep the 150 most severe ----------
 // every row has gaps 10px then 20px, so every row is 1 high issue: 200 found, 150 kept
 const cap = await context.newPage();

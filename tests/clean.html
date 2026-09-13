@@ -18,6 +18,11 @@
   .cell { height: 90px; background: #eef2ff; border-radius: 8px; }
   .list > div { background: #f1f5f9; padding: 12px; margin-bottom: 12px; }
   .callout { background: #fff6e0; padding: 16px; }
+  /* centered flex: alignItems on a column, justifyContent on a row. Different widths on purpose. */
+  .fcol { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .fcol > div { background: #ede9fe; padding: 10px 16px; }
+  .frow { display: flex; justify-content: center; gap: 18px; }
+  .frow > span { background: #dcfce7; padding: 8px 14px; }
   a { color: #1d4ed8; }
 </style>
 </head>
@@ -31,5 +36,7 @@
   <section><div class="wrap"><h2>Grid</h2><div class="grid"><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div></div></div></section>
   <section><div class="wrap"><h2>List</h2><div class="list"><div>Item 1</div><div>Item 2</div><div>Item 3</div></div></div></section>
   <section><div class="wrap"><div class="callout"><h2>Callout</h2><p>Even padding on every side.</p></div></div></section>
+  <section><div class="wrap"><h2>Centered column</h2><div class="fcol"><div>Short</div><div>A much longer line than the others</div><div>Middle length</div></div></div></section>
+  <section><div class="wrap"><h2>Centered row</h2><div class="frow"><span>One</span><span>Two is longer</span><span>Three</span></div></div></section>
 </body>
 </html>
