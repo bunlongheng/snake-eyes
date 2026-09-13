@@ -30,7 +30,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
-      - name: Unit + browser tests (fixture, clean page, cap, widths, dark mode)
+      - name: Unit, overlay and loaded-extension tests
         run: npm test
       - name: Pack and check the zip holds exactly the extension
         shell: bash

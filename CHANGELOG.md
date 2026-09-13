@@ -8,7 +8,9 @@
 - Panel: keyboard access (buttons, focus rings, Escape), collapse, bottom sheet on phones, dark mode, fixed typography
 - Closed shadow root, constructed stylesheet, page-level CSS removed on toggle-off, no clipboardWrite permission
 - Report carries the origin and path only (just the basename on file: pages), and element labels are quoted with markdown characters stripped
-- Tests: exact fixture count, clean-page zero check, cap check, 3 widths, unit tests for the pure helpers
+- Tests: exact fixture count, clean-page zero check, cap check, 3 widths, unit tests for the pure helpers, and a suite that loads the real extension and drives the service worker
+- Re-scan button appears once a resize makes the measurements stale, so a new scan is 1 click
+- Closing with Escape or the close button now removes the injected page CSS too
 - Severity bands moved so the low tier is reachable: high 8px and up, medium 5 to 7, low 3 to 4
 - Panel greys out after a resize, and the report always states the viewport it measured
 - Header wraps instead of truncating, so wider system fonts cannot clip the controls

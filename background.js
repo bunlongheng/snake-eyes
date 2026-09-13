@@ -43,3 +43,13 @@ const run = async (tab) => {
 };
 
 chrome.action.onClicked.addListener(run);
+
+// The overlay talks back for the 2 things it cannot do itself: dropping the page-level CSS when
+// it closes by Escape or the close button (a click toggle already handles that path), and asking
+// for a fresh scan after a resize without making the user click the icon twice.
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  const tabId = sender.tab && sender.tab.id;
+  if (!tabId) return;
+  if (msg && msg.type === "closed") chrome.scripting.removeCSS({ target: { tabId }, files: ["overlay.css"] }).catch(() => {});
+  if (msg && msg.type === "rescan") run(sender.tab);
+});

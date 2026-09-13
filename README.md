@@ -91,7 +91,7 @@ The overlay adds 1 element to the page, `#snake-eyes-root`, with a closed shadow
 ```bash
 npm install
 npx playwright install chromium   # once
-npm test            # unit tests for lib/pure.js, then headless Chromium against 3 pages
+npm test            # unit tests, the overlay against 3 pages, then the real extension loaded in Chromium
 npm run lint        # eslint, zero warnings
 npm run check:version   # manifest.json and package.json must agree
 npm run pack        # zip just the files Chrome needs, for a release or a store upload
@@ -99,7 +99,7 @@ npm run icons       # regenerate the icon PNGs
 npm run hero        # refresh docs/hero.png from the fixture
 ```
 
-`tests/fixture.html` plants exactly 1 mistake per check (6 in all) next to prose with inline links and deep nesting that must not be flagged. The browser test asserts exactly those 6 come back, that every selector resolves to its element, that the panel works by mouse and keyboard, that every header control stays inside the panel and clickable at 3 widths and in dark mode, that a resize greys the panel out, that `tests/clean.html` yields 0 issues, and that a 200-issue page is capped at 150 most severe first. The fixture also runs at 390px and 768px. CI runs the same on every push to main and every pull request, on Node 22 with SHA-pinned actions. A `v*` tag runs the suite again and attaches a zip of the extension to the GitHub release.
+`tests/fixture.html` plants exactly 1 mistake per check (6 in all) next to prose with inline links and deep nesting that must not be flagged. The browser test asserts exactly those 6 come back, that every selector resolves to its element, that the panel works by mouse and keyboard, that every header control stays inside the panel and clickable at 3 widths and in dark mode, that a resize greys the panel out, that `tests/clean.html` yields 0 issues, and that a 200-issue page is capped at 150 most severe first. The fixture also runs at 390px and 768px. A third suite loads the unpacked extension in Chromium and drives the service worker itself, so the manifest, the CSS hand-off, the toggle and the Escape cleanup are covered by something other than a hand-rolled injection. CI runs all of it on every push to main and every pull request, on Node 22 with SHA-pinned actions. A `v*` tag runs the suite again and attaches a zip of the extension to the GitHub release.
 
 ## Decisions
 

@@ -337,6 +337,7 @@
       <span class="snk-logo" aria-hidden="true"><i></i><i></i></span>
       <h2 class="snk-title-h">Snake Eyes</h2>
       <span class="snk-count${issues.length ? "" : " snk-count-ok"}"></span>
+      <button class="snk-btn snk-rescan" type="button" title="Measure this page again at the current size" hidden>Re-scan</button>
       <button class="snk-btn snk-all" type="button" title="Draw every guide at once">Show all</button>
       <button class="snk-btn snk-copy" type="button" title="Copy the report for an agent">Copy report</button>
       <button class="snk-icon snk-collapse" type="button" title="Collapse the panel" aria-label="Collapse"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
@@ -417,9 +418,12 @@
     setTimeout(() => { btn.textContent = "Copy report"; }, LIMITS.copyResetMs);
   });
   on(panel.querySelector(".snk-collapse"), "click", () => { panel.classList.toggle("snk-collapsed"); });
+  on(panel.querySelector(".snk-rescan"), "click", () => { close(false); tellWorker("rescan"); });
 
-  const close = () => { ac.abort(); root.remove(); delete window.__snakeEyes; };
-  on(panel.querySelector(".snk-x"), "click", close);
+  // chrome is absent when the tests inject this directly, so every call is guarded.
+  const tellWorker = (type) => { try { if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type }); } catch { /* worker asleep or not an extension context */ } };
+  const close = (notify = true) => { ac.abort(); root.remove(); delete window.__snakeEyes; if (notify) tellWorker("closed"); };
+  on(panel.querySelector(".snk-x"), "click", () => close());
   on(document, "keydown", (e) => { if (e.key === "Escape") close(); });
   let resizeTimer = 0;
   on(window, "resize", () => {
@@ -428,6 +432,7 @@
     resizeTimer = setTimeout(() => {
       panel.querySelector(".snk-stale").hidden = false;
       panel.querySelector(".snk-legend").hidden = true;
+      panel.querySelector(".snk-rescan").hidden = false;
       // every measurement on screen belongs to the old viewport, so nothing here may be replayed.
       // Copy stays live on purpose: the report states the viewport it was measured at.
       list.querySelectorAll(".snk-item").forEach((b) => { b.disabled = true; });
