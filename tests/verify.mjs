@@ -164,10 +164,48 @@ const before = await inject(stale);
 await stale.setViewportSize({ width: 1000, height: 700 });
 const staleOk = await stale.waitForFunction(() => { const sh = window.__snakeEyes.shadow; return !sh.querySelector(".snk-stale").hidden && sh.querySelector(".snk-all").disabled && [...sh.querySelectorAll(".snk-item")].every((b) => b.disabled); }, undefined, { timeout: 4000 }).then(() => true, () => false);
 check(staleOk, "resizing marks the panel stale and disables the measurements it can no longer draw");
+check(await inShadow(stale, () => !window.__snakeEyes.shadow.querySelector(".snk-rescan").hidden), "a stale panel offers Re-scan instead of leaving the user to guess");
+check(await inShadow(stale, () => { const sh = window.__snakeEyes.shadow; return sh.querySelector(".snk-rescan").getBoundingClientRect().width > 0 && /Re-scan/.test(sh.querySelector(".snk-stale").textContent); }), "the stale notice names the Re-scan button that fixes it");
 check(/Viewport: 1280x900/.test(await stale.evaluate(() => window.__snakeEyes.report())), "the report still states the viewport it measured, not the new one");
 check(await stale.evaluate(() => window.__snakeEyes.shadow.querySelectorAll(".snk-line").length === 0), "stale guides are cleared rather than left pointing at the old layout");
 void before;
 await stale.close();
+
+// ---------- Re-scan closes the overlay and asks the worker for a fresh pass ----------
+// The worker side of this channel is covered in tests/extension.mjs, where Escape proves a
+// message really reaches background.js. Here we prove the button sends the right one.
+const rescan = await context.newPage();
+await rescan.goto("file://" + join(here, "fixture.html"));
+await rescan.addStyleTag({ content: css });
+await rescan.evaluate((c) => {
+  window.__SNAKE_EYES_CSS__ = c;
+  window.__snakeEyesTest = true;
+  window.__sent = [];
+  window.chrome = { runtime: { id: "test", sendMessage: (m) => window.__sent.push(m) } };
+}, panelCss);
+await rescan.addScriptTag({ content: pure });
+await rescan.addScriptTag({ content: js });
+await rescan.waitForFunction(() => window.__snakeEyes && window.__snakeEyes.ready);
+await inShadow(rescan, () => { window.__snakeEyes.shadow.querySelector(".snk-rescan").click(); });
+await rescan.waitForTimeout(200);
+const sent = await rescan.evaluate(() => ({ msgs: window.__sent.map((m) => m.type), gone: !document.getElementById("snake-eyes-root") }));
+check(sent.gone && sent.msgs.join() === "rescan", `Re-scan tears the overlay down and asks for a new pass (sent: ${sent.msgs.join(", ") || "nothing"})`);
+check(!sent.msgs.includes("closed"), "Re-scan does not also ask the worker to strip the CSS it is about to reuse");
+await rescan.close();
+
+// ---------- a page cannot dismiss or stale the panel behind the user's back ----------
+const hostile = await context.newPage();
+await hostile.goto("file://" + join(here, "fixture.html"));
+await inject(hostile);
+await hostile.evaluate(() => { window.__snakeEyesTest = false; });
+await hostile.evaluate(() => {
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  window.dispatchEvent(new Event("resize"));
+});
+await hostile.waitForTimeout(400);
+check(await hostile.evaluate(() => !!window.__snakeEyes && !!document.getElementById("snake-eyes-root")), "a synthetic Escape from the page cannot close the overlay");
+check(await hostile.evaluate(() => window.__snakeEyes.shadow.querySelector(".snk-stale").hidden), "a synthetic resize from the page cannot mark the panel stale");
+await hostile.close();
 
 // ---------- dark mode ----------
 const darkCtx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });

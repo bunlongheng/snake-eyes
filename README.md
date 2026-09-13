@@ -26,7 +26,17 @@ Nothing runs until you click. The extension asks only for `activeTab` and `scrip
 | Padding | Left vs right and top vs bottom padding on containers | Dashed spans inside the box with both numbers |
 | Rhythm | Top and bottom padding across page sections, and the content inset in each section | Red span on the section that breaks the pattern, with the expected value |
 
-Everything is measured from the rendered layout at the current viewport, tolerance 2px. Resize and the panel greys out, because every number on screen belongs to the old layout. Click the icon again to audit the new width.
+Everything is measured from the rendered layout at the current viewport, tolerance 2px. Resize and the panel greys out, because every number on screen belongs to the old layout, and a Re-scan button appears to measure the new size.
+
+### What it deliberately does not flag
+
+A spacing auditor is only useful if you trust its silence, so these are skipped rather than guessed at:
+
+- **Siblings that are not the same kind.** Comparing a heading against a card tells you nothing, so a row or stack is only measured when its children share a tag or a first class name.
+- **Runs of text.** A paragraph with links in it has uneven gaps by nature. Inline children and mixed text nodes are left alone.
+- **Centered groups.** Items centered on their parent are meant to have different edges.
+- **Anything inside a shadow root or an iframe.** The scan walks the main document only.
+- **Sections that are not `<section>` elements.** The vertical rhythm check looks for real section tags, so a page built from divs gets the other 3 checks but not that one.
 
 ## The panel
 

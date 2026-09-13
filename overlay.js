@@ -344,7 +344,7 @@
       <button class="snk-icon snk-x" type="button" title="Close (Esc)" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </header>
     <ol class="snk-list"></ol>
-    <footer class="snk-foot"><span class="snk-legend">Click an issue to jump to it. Red = off, green = the value the siblings agree on.</span><span class="snk-stale" hidden>Viewport changed. Click the icon to re-scan.</span></footer>`;
+    <footer class="snk-foot"><span class="snk-legend">Click an issue to jump to it. Red = off, green = the value the siblings agree on.</span><span class="snk-stale" hidden>Viewport changed. Re-scan to measure this size.</span></footer>`;
   panel.querySelector(".snk-count").textContent = countText;
   shadow.appendChild(panel);
   const list = panel.querySelector(".snk-list");
@@ -386,9 +386,10 @@
     Object.assign(d.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
     frag.appendChild(d);
   };
-  // read nothing from the page here: rects were stored at analysis time, so this is 1 write
+  // read nothing from the page here: rects were stored at analysis time, so this is writes only.
+  // sizeLayer reads scrollWidth/scrollHeight, so it runs on mount and on resize, never per draw.
   const draw = (items, activeIssue) => {
-    sizeLayer(); clearGuides();
+    clearGuides();
     const frag = document.createDocumentFragment();
     for (const i of items) {
       boxNode(i.r, i === activeIssue, frag);
@@ -424,9 +425,14 @@
   const tellWorker = (type) => { try { if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type }); } catch { /* worker asleep or not an extension context */ } };
   const close = (notify = true) => { ac.abort(); root.remove(); delete window.__snakeEyes; if (notify) tellWorker("closed"); };
   on(panel.querySelector(".snk-x"), "click", () => close());
-  on(document, "keydown", (e) => { if (e.key === "Escape") close(); });
+  // A page can dispatch its own keydown and resize events. Acting on those would let the site
+  // being audited quietly dismiss the panel or mark it stale, so only real user input counts.
+  const real = (e) => e.isTrusted || window.__snakeEyesTest;
+  on(document, "keydown", (e) => { if (e.key === "Escape" && real(e)) close(); });
   let resizeTimer = 0;
-  on(window, "resize", () => {
+  on(window, "resize", (e) => {
+    if (!real(e)) return;
+    sizeLayer();
     clearGuides();
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
