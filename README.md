@@ -42,9 +42,9 @@ A spacing auditor is only useful if you trust its silence, so these are skipped 
 
 - Issues sorted high to low. High is 8px or more off, medium 5 to 7, low 3 to 4. Anything inside the 2px tolerance is not reported at all. The list caps at 150, most severe first, and says so.
 - Click an issue (or Tab to it and press Enter): the page scrolls to it, the element gets a red outline and its guides appear.
-- **Show all** draws every guide at once. **Copy report** puts the markdown below on the clipboard. `Esc` closes.
+- **Show all** draws every guide at once. **Copy report** puts the markdown below on the clipboard. `Esc` closes and hands focus back where it was.
 - On a phone-sized window the panel becomes a bottom sheet. It follows your light or dark theme.
-- Resize the window and the guides clear; click the icon again to re-scan at the new width.
+- Resize the window and the guides clear, because they described the old layout. A **Re-scan** button takes their place.
 
 ## The report
 
@@ -116,7 +116,7 @@ npm run hero        # refresh docs/hero.png from the fixture
 | Decision | Why |
 |----------|-----|
 | Measure the rendered layout, not the CSS | What the eye sees is the bounding box. A 24px gap made of margin plus padding is still a 24px gap. |
-| The majority wins | The expected value is what most siblings agree on. The odd one out is the bug, not the design. |
+| A real majority, or silence | The expected value has to be one most siblings actually share. 3 buttons at their natural widths agree on nothing, so nothing is reported. Guessing a middle value there would invent a rule the designer never wrote. |
 | 2px tolerance | Subpixel rounding and borders create 1px noise. 3px is where a human starts to notice. |
 | Report first, pictures second | The clipboard report is the product. Guides exist so you can trust the report before pasting it. |
 | No background scanning | It only runs when clicked. A spacing audit on every page load would be noise and a privacy problem. |

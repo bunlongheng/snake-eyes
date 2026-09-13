@@ -75,7 +75,7 @@ try {
   check(on.mounted, "clicking the action injects the overlay into a normal http page");
   check(on.styled === "absolute", `overlay.css is applied to the host element (position: ${on.styled})`);
   check(on.closedShadow, "the shadow root is closed, so the page cannot reach into the panel");
-  check(await page.evaluate(() => window.__SNAKE_EYES_CSS__ === undefined), "panel.css is handed over and then deleted from the page window");
+  check(await page.evaluate(() => window.__SNAKE_EYES_CSS__ === undefined && !window.__snakeEyes), "panel.css and the overlay handle never appear on the page's own window");
 
   const title = await worker.evaluate((id) => chrome.action.getTitle({ tabId: id }), tabId);
   check(!/cannot run here/.test(title), `the action title reports success (${title})`);
@@ -106,6 +106,30 @@ try {
     return { mounted: !!document.getElementById("snake-eyes-root"), pos };
   });
   check(!afterEsc.mounted && afterEsc.pos !== "absolute", `closing with Escape also clears the injected CSS (${afterEsc.pos})`);
+
+  // Re-scan re-injects. insertCSS stacks, so without a removeCSS first the rule survives the
+  // next toggle-off. This is the shape that bug took, driven through the real worker.
+  await click();
+  // executeScript defaults to the extension's isolated world, the same one overlay.js runs in,
+  // so this presses the real button rather than reaching past it.
+  await worker.evaluate(async (id) => {
+    await chrome.scripting.executeScript({
+      target: { tabId: id },
+      func: () => { const sh = window.__snakeEyes.shadow; sh.querySelector(".snk-rescan").hidden = false; sh.querySelector(".snk-rescan").click(); },
+    });
+  }, tabId);
+  await page.waitForTimeout(1200);
+  check(await page.evaluate(() => !!document.getElementById("snake-eyes-root")), "Re-scan tears the overlay down and brings it straight back");
+  await click();
+  const afterRescan = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.id = "snake-eyes-root";
+    document.body.appendChild(probe);
+    const pos = getComputedStyle(probe).position;
+    probe.remove();
+    return pos;
+  });
+  check(afterRescan !== "absolute", `a Re-scan then a toggle off leaves no CSS behind (${afterRescan})`);
 
   // A page Chrome will not let us touch must be reported honestly, not as a crash.
   const blocked = await worker.evaluate(async (id) => {

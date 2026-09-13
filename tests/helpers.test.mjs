@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
-const { TOL, LIMITS, px, same, severityFor, mode, outliers, sameKind } = createRequire(import.meta.url)("../lib/pure.js");
+const { TOL, LIMITS, px, same, severityFor, mode, majority, outliers, sameKind } = createRequire(import.meta.url)("../lib/pure.js");
 
 test("px rounds and tolerates junk", () => {
   assert.equal(px("16px"), 16);
@@ -38,6 +38,23 @@ test("mode picks the majority, the median when all differ, 0 when empty", () => 
   assert.equal(mode([10, 20, 30]), 20);
   assert.equal(mode([16, 28]), 28); // all unique: median of 2 is the upper one
   assert.equal(mode([]), 0);
+});
+
+test("majority: a value most siblings share, or null when they never agreed", () => {
+  assert.equal(majority([24, 24, 31, 24]), 24);
+  assert.equal(majority([16, 28, 16]), 16);
+  assert.equal(majority([10, 20, 30]), null, "3 different values agree on nothing");
+  assert.equal(majority([100, 140]), null, "2 different values agree on nothing");
+  assert.equal(majority([10, 10, 20, 20]), null, "a tie is not a majority");
+  assert.equal(majority([5]), null);
+  assert.equal(majority([]), null);
+});
+
+test("outliers stays silent when the siblings never agreed", () => {
+  // 3 buttons at their natural widths share no edge. Calling the middle one correct would
+  // invent a rule nobody wrote and report the other 2 as broken.
+  assert.deepEqual(outliers([100, 140, 180]), { exp: 0, diff: 0, off: [] });
+  assert.deepEqual(outliers([100, 140]), { exp: 0, diff: 0, off: [] });
 });
 
 test("outliers reports the expected value, spread, and offending indexes", () => {

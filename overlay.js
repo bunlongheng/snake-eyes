@@ -325,7 +325,7 @@
   // ---------- stage 4: show it ----------
   // Builds the guide layer and the panel inside a closed shadow root and wires every listener
   // to 1 AbortController, so close() takes the whole thing down in 1 call.
-  function mount(issues, report) {
+  function mount(issues, report, { total, dropped }) {
     const ac = new AbortController();
     const on = (target, type, fn) => target.addEventListener(type, fn, { signal: ac.signal });
     const root = document.createElement("div");
@@ -354,6 +354,7 @@
         <span class="snk-logo" aria-hidden="true"><i></i><i></i></span>
         <h2 class="snk-title-h">Snake Eyes</h2>
         <span class="snk-count${issues.length ? "" : " snk-count-ok"}"></span>
+        <span class="snk-spacer"></span>
         <button class="snk-btn snk-rescan" type="button" title="Measure this page again at the current size" hidden>Re-scan</button>
         <button class="snk-btn snk-all" type="button" title="Draw every guide at once">Show all</button>
         <button class="snk-btn snk-copy" type="button" title="Copy the report for an agent">Copy report</button>
@@ -378,7 +379,7 @@
       li.appendChild(btn);
       list.appendChild(li);
     }
-    if (!issues.length) list.innerHTML = `<li class="snk-empty">No spacing issues at this viewport. Resize and click the icon again to test another width.</li>`;
+    if (!issues.length) list.innerHTML = `<li class="snk-empty">No spacing issues at this viewport. Resize the window and Re-scan to test another width.</li>`;
 
     const clearGuides = () => { layer.replaceChildren(); };
     const guideNodes = (g, frag) => {
@@ -440,7 +441,15 @@
 
     // chrome is absent when the tests inject this directly, so every call is guarded.
     const tellWorker = (type) => { try { if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type }); } catch { /* worker asleep or not an extension context */ } };
-    const close = (notify = true) => { ac.abort(); root.remove(); delete window.__snakeEyes; if (notify) tellWorker("closed"); };
+    const returnFocusTo = document.activeElement;
+    const close = (notify = true) => {
+      ac.abort();
+      root.remove();
+      delete window.__snakeEyes;
+      // hand focus back where it was rather than dropping the keyboard user on <body>
+      if (returnFocusTo && returnFocusTo.isConnected && typeof returnFocusTo.focus === "function") returnFocusTo.focus({ preventScroll: true });
+      if (notify) tellWorker("closed");
+    };
     on(panel.querySelector(".snk-x"), "click", () => close());
     // A page can dispatch its own keydown and resize events. Acting on those would let the site
     // being audited quietly dismiss the panel or mark it stale, so only real user input counts.
@@ -476,7 +485,7 @@
   const scan = scanPage();
   const { issues, total, dropped } = analyze(scan);
   const report = buildReport(issues, { total, dropped, scanTruncated: scan.scanTruncated });
-  const ui = mount(issues, report);
+  const ui = mount(issues, report, { total, dropped });
 
   window.__snakeEyes = {
     ready: true,
@@ -485,7 +494,7 @@
     total, dropped, scanTruncated: scan.scanTruncated, nodesSeen: scan.nodesSeen,
     report, shadow: ui.shadow, close: ui.close,
     // the stages, so a test can drive one without the other 3
-    stages: { scanPage, analyze, buildReport },
+    stages: { scanPage, analyze, buildReport, mount },
   };
   return false;
 })();

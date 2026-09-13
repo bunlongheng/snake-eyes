@@ -47,9 +47,16 @@ chrome.action.onClicked.addListener(run);
 // The overlay talks back for the 2 things it cannot do itself: dropping the page-level CSS when
 // it closes by Escape or the close button (a click toggle already handles that path), and asking
 // for a fresh scan after a resize without making the user click the icon twice.
+const dropCss = (tabId) => chrome.scripting.removeCSS({ target: { tabId }, files: ["overlay.css"] }).catch(() => {});
+
+// Named so tests can drive it. The removeCSS is not optional: run() inserts overlay.css every
+// time, and insertCSS stacks, so re-scanning without dropping the old copy first left a rule
+// behind that the next toggle-off could not clear.
+const rescan = async (tab) => { await dropCss(tab.id); await run(tab); };
+
 chrome.runtime.onMessage.addListener((msg, sender) => {
   const tabId = sender.tab && sender.tab.id;
   if (!tabId) return;
-  if (msg && msg.type === "closed") chrome.scripting.removeCSS({ target: { tabId }, files: ["overlay.css"] }).catch(() => {});
-  if (msg && msg.type === "rescan") run(sender.tab);
+  if (msg && msg.type === "closed") dropCss(tabId);
+  if (msg && msg.type === "rescan") rescan(sender.tab);
 });

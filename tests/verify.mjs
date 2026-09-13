@@ -293,7 +293,10 @@ await huge.close();
 // ---------- cap: 200 uneven rows keep the 150 most severe ----------
 // every row has gaps 10px then 20px, so every row is 1 high issue: 200 found, 150 kept
 const cap = await context.newPage();
-await cap.setContent(`<!doctype html><html><body style="margin:0">${Array.from({ length: 200 }, () => `<div class="row" style="display:flex;padding:4px 20px"><span class="c" style="width:40px;height:20px;background:#ddd;margin-right:10px"></span><span class="c" style="width:40px;height:20px;background:#ddd;margin-right:20px"></span><span class="c" style="width:40px;height:20px;background:#ddd"></span></div>`).join("")}</body></html>`);
+// 4 items per row with gaps 20, 10, 20: a real majority of 20px and 1 item that breaks it,
+// which is exactly the shape the majority rule is meant to report.
+const cell = (mr) => `<span class="c" style="width:40px;height:20px;background:#ddd${mr ? `;margin-right:${mr}px` : ""}"></span>`;
+await cap.setContent(`<!doctype html><html><body style="margin:0">${Array.from({ length: 200 }, () => `<div class="row" style="display:flex;padding:4px 20px">${cell(20)}${cell(10)}${cell(20)}${cell(0)}</div>`).join("")}</body></html>`);
 const cp = await inject(cap);
 check(cp.total > 150 && cp.issues.length === 150 && cp.dropped === cp.total - 150, `cap: ${cp.issues.length} shown of ${cp.total}, ${cp.dropped} dropped`);
 check(/shown of \d+/.test(cp.report) && /capped at 150/.test(cp.report), "cap is stated in the report");

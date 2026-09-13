@@ -15,7 +15,7 @@ export default [
     // The bodies passed to worker.evaluate() run inside the extension service worker, where
     // chrome and background.js's own run() are in scope. Node never evaluates them.
     files: ["tests/extension.mjs"],
-    languageOptions: { globals: { ...globals.webextensions, run: "readonly" } },
+    languageOptions: { globals: { ...globals.webextensions, run: "readonly", rescan: "readonly" } },
   },
   {
     files: ["tests/**/*.mjs", "scripts/**/*.mjs", "eslint.config.mjs"],

@@ -13,6 +13,9 @@
 - Re-scan button appears once a resize makes the measurements stale, so a new scan is 1 click
 - Closing with Escape or the close button now removes the injected page CSS too
 - Severity bands moved so the low tier is reachable: high 8px and up, medium 5 to 7, low 3 to 4
+- A check now needs a real majority to fire: 3 buttons at their natural widths share no edge, and
+  the old median fallback called the middle one correct and reported the other 2 as broken
+- Re-scan no longer stacks a second copy of the page CSS that a later toggle off could not clear
 - Panel greys out after a resize, and the report always states the viewport it measured
 - Header wraps instead of truncating, so wider system fonts cannot clip the controls
 - Panel takes focus when it opens, so Tab and Escape work without clicking first
