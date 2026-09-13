@@ -56,6 +56,7 @@ const ui = await inShadow(page, () => { const sh = window.__snakeEyes.shadow; re
 check(ui.items === 6 && ui.buttons === 6, "panel lists every issue as a real button");
 check(ui.guides > 0 && ui.badges > 0 && ui.box, "first issue is highlighted with guides and numbers");
 check(ui.h2 && !!ui.aria, "panel has a heading and an accessible name");
+check(await inShadow(page, () => window.__snakeEyes.shadow.activeElement === window.__snakeEyes.shadow.querySelector(".snk-panel")), "the panel takes focus on open, so Tab and Escape work without a click");
 check(await inShadow(page, () => { const sh = window.__snakeEyes.shadow; const cb = getComputedStyle(sh.querySelector(".snk-btn")), ct = getComputedStyle(sh.querySelector(".snk-tag")); return cb.fontSize === "12px" && cb.fontWeight === "600" && ct.fontSize === "10px"; }), "button and tag typography apply (no invalid font shorthand)");
 
 // click the 3rd item, then keyboard to the 2nd
@@ -86,6 +87,22 @@ const headerFits = async (pg, label) => {
   check(r.length === 0, `${label}: every header control sits inside the panel and is clickable${r.length ? " (" + r.join(", ") + ")" : ""}`);
   const clipped = await inShadow(pg, () => [...window.__snakeEyes.shadow.querySelectorAll(".snk-head > *")].filter((e) => getComputedStyle(e).display !== "none" && e.scrollWidth > e.clientWidth + 1).map((e) => e.className || e.tagName));
   check(clipped.length === 0, `${label}: no header text is truncated${clipped.length ? " (" + clipped.join(", ") + ")" : ""}`);
+  const contrast = await inShadow(pg, () => {
+    const lum = (c) => { const v = c.match(/[\d.]+/g).slice(0, 3).map((n) => { n /= 255; return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4); }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+    const bad = [];
+    const sh = window.__snakeEyes.shadow;
+    sh.querySelector(".snk-rescan").hidden = false;
+    for (const el of sh.querySelectorAll(".snk-btn, .snk-tag, .snk-count, .snk-stale, .snk-legend, .snk-title-h")) {
+      let bg = getComputedStyle(el).backgroundColor, node = el;
+      while (/rgba\(0, 0, 0, 0\)|transparent/.test(bg) && node.parentElement) { node = node.parentElement; bg = getComputedStyle(node).backgroundColor; }
+      const l1 = lum(getComputedStyle(el).color), l2 = lum(bg);
+      const r = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+      if (r < 4.5) bad.push(`${el.className.split(" ").pop()} ${r.toFixed(2)}:1`);
+    }
+    sh.querySelector(".snk-rescan").hidden = true;
+    return bad;
+  });
+  check(contrast.length === 0, `${label}: every control clears 4.5:1 contrast${contrast.length ? " (" + contrast.join(", ") + ")" : ""}`);
 };
 await headerFits(page, "header at 1280px");
 
@@ -162,9 +179,10 @@ await stale.setViewportSize({ width: 1280, height: 900 });
 await stale.goto("file://" + join(here, "fixture.html"));
 const before = await inject(stale);
 await stale.setViewportSize({ width: 1000, height: 700 });
-const staleOk = await stale.waitForFunction(() => { const sh = window.__snakeEyes.shadow; return !sh.querySelector(".snk-stale").hidden && sh.querySelector(".snk-all").disabled && [...sh.querySelectorAll(".snk-item")].every((b) => b.disabled); }, undefined, { timeout: 4000 }).then(() => true, () => false);
-check(staleOk, "resizing marks the panel stale and disables the measurements it can no longer draw");
+const staleOk = await stale.waitForFunction(() => { const sh = window.__snakeEyes.shadow; return !sh.querySelector(".snk-stale").hidden && sh.querySelector(".snk-all").hidden && [...sh.querySelectorAll(".snk-item")].every((b) => b.disabled); }, undefined, { timeout: 4000 }).then(() => true, () => false);
+check(staleOk, "resizing marks the panel stale and withdraws the measurements it can no longer draw");
 check(await inShadow(stale, () => !window.__snakeEyes.shadow.querySelector(".snk-rescan").hidden), "a stale panel offers Re-scan instead of leaving the user to guess");
+check(await inShadow(stale, () => window.__snakeEyes.shadow.querySelector(".snk-head").getBoundingClientRect().height < 56), "showing Re-scan keeps the header on 1 row");
 check(await inShadow(stale, () => { const sh = window.__snakeEyes.shadow; return sh.querySelector(".snk-rescan").getBoundingClientRect().width > 0 && /Re-scan/.test(sh.querySelector(".snk-stale").textContent); }), "the stale notice names the Re-scan button that fixes it");
 check(/Viewport: 1280x900/.test(await stale.evaluate(() => window.__snakeEyes.report())), "the report still states the viewport it measured, not the new one");
 check(await stale.evaluate(() => window.__snakeEyes.shadow.querySelectorAll(".snk-line").length === 0), "stale guides are cleared rather than left pointing at the old layout");

@@ -9,7 +9,7 @@
   --snk-bg: #ffffff; --snk-bg2: #f7f8fa; --snk-fg: #1a2129; --snk-fg2: #5b6472; --snk-line: #e5e7eb;
   --snk-hover: #f1f5f9; --snk-current: #fff6e0; --snk-current-line: #fcd34d; --snk-focus: #4338ca;
   --snk-primary-bg: #1a2129; --snk-primary-fg: #ffffff; --snk-primary-hover: #374151;
-  --snk-warn: #b45309;
+  --snk-warn: #b45309; --snk-warn-fg: #ffffff;
   --snk-high-bg: #ffeaea; --snk-high-fg: #c0392b;
   --snk-med-bg: #fff6e0; --snk-med-fg: #b45309;
   --snk-low-bg: #e7f7ec; --snk-low-fg: #15803d;
@@ -20,7 +20,7 @@
     --snk-bg: #111827; --snk-bg2: #0b1220; --snk-fg: #e5e7eb; --snk-fg2: #9ca3af; --snk-line: #263042;
     --snk-hover: #1f2937; --snk-current: #3b2f06; --snk-current-line: #a16207; --snk-focus: #93c5fd;
     --snk-primary-bg: #e5e7eb; --snk-primary-fg: #111827; --snk-primary-hover: #f9fafb;
-    --snk-warn: #f59e0b;
+    --snk-warn: #f59e0b; --snk-warn-fg: #111827;
     --snk-high-bg: #3f1d1d; --snk-high-fg: #fca5a5;
     --snk-med-bg: #3b2f06; --snk-med-fg: #fcd34d;
     --snk-low-bg: #10291a; --snk-low-fg: #86efac;
@@ -43,6 +43,7 @@
 .snk-badge.snk-ok { background: #15803d; z-index: 1; }
 
 /* the panel */
+.snk-panel:focus-visible { outline: 2px solid var(--snk-focus); outline-offset: -2px; }
 .snk-panel { position: fixed; top: 12px; right: 12px; bottom: 12px; width: 460px;  /* measured: the header needs 450px to show its name, count and 4 controls in full */ max-width: calc(100vw - 24px); display: flex; flex-direction: column; background: var(--snk-bg); color: var(--snk-fg); border: 1px solid var(--snk-line); border-radius: 14px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25); font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; font-size: 13px; line-height: 1.45; z-index: 2; overflow: hidden; }
 .snk-panel.snk-collapsed { bottom: auto; }
 .snk-panel.snk-collapsed .snk-list, .snk-panel.snk-collapsed .snk-foot { display: none; }
@@ -89,4 +90,4 @@
 .snk-empty { padding: 20px 12px; color: var(--snk-fg2); }
 .snk-foot { padding: 8px 12px; border-top: 1px solid var(--snk-line); color: var(--snk-fg2); font-size: 11px; background: var(--snk-bg2); }
 .snk-stale { color: var(--snk-warn); font-weight: 600; }
-.snk-rescan { background: var(--snk-warn); color: #fff; border-color: var(--snk-warn); }
+.snk-rescan { background: var(--snk-warn); color: var(--snk-warn-fg); border-color: var(--snk-warn); }

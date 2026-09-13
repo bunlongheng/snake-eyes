@@ -332,6 +332,7 @@
   const panel = document.createElement("aside");
   panel.className = "snk-panel";
   panel.setAttribute("aria-label", "Snake Eyes spacing issues");
+  panel.tabIndex = -1; // the panel takes focus on open so Tab walks the issues and Escape closes
   panel.innerHTML = `
     <header class="snk-head">
       <span class="snk-logo" aria-hidden="true"><i></i><i></i></span>
@@ -438,16 +439,19 @@
     resizeTimer = setTimeout(() => {
       panel.querySelector(".snk-stale").hidden = false;
       panel.querySelector(".snk-legend").hidden = true;
+      // Re-scan replaces Show all rather than joining it: every guide it would draw is stale,
+      // and a 5th control wraps the header onto a second row.
       panel.querySelector(".snk-rescan").hidden = false;
+      panel.querySelector(".snk-all").hidden = true;
       // every measurement on screen belongs to the old viewport, so nothing here may be replayed.
       // Copy stays live on purpose: the report states the viewport it was measured at.
       list.querySelectorAll(".snk-item").forEach((b) => { b.disabled = true; });
-      panel.querySelector(".snk-all").disabled = true;
     }, LIMITS.resizeDebounceMs);
   });
 
   document.documentElement.appendChild(root);
   if (issues.length) activate(issues[0]);
+  panel.focus({ preventScroll: true });
 
   window.__snakeEyes = {
     ready: true,

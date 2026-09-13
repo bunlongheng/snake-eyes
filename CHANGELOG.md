@@ -14,6 +14,9 @@
 - Severity bands moved so the low tier is reachable: high 8px and up, medium 5 to 7, low 3 to 4
 - Panel greys out after a resize, and the report always states the viewport it measured
 - Header wraps instead of truncating, so wider system fonts cannot clip the controls
+- Panel takes focus when it opens, so Tab and Escape work without clicking first
+- Every panel control is checked against 4.5:1 contrast in both themes on every test run
+- Synthetic keyboard and resize events from the page under audit are ignored
 - Keyboard shortcut Alt+Shift+S, release packaging, version check, CI on Node 22 with pinned actions
 
 ## 1.0.0 - 2026-09-11
