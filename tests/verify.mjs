@@ -191,6 +191,25 @@ check(await stale.evaluate(() => window.__snakeEyes.shadow.querySelectorAll(".sn
 void before;
 await stale.close();
 
+// ---------- the stages run independently of each other ----------
+// The point of splitting scan, analyze and report apart is that each can be driven alone.
+// A fresh scan pushed through analyze must reproduce the live run exactly.
+const stageCheck = await context.newPage();
+await stageCheck.goto("file://" + join(here, "fixture.html"));
+const live = await inject(stageCheck);
+const replay = await stageCheck.evaluate(() => {
+  const { scanPage, analyze, buildReport } = window.__snakeEyes.stages;
+  const scan = scanPage();
+  const seen = scan.nodesSeen;
+  const { issues, total, dropped } = analyze(scan);
+  const text = buildReport(issues, { total, dropped, scanTruncated: scan.scanTruncated })();
+  return { titles: issues.map((i) => i.title), total, dropped, seen, mapEmptied: scan.info.size, text };
+});
+check(replay.titles.join("|") === live.issues.map((i) => i.title).join("|"), `analyze replays the same ${replay.titles.length} issues from a fresh scan`);
+check(replay.seen > 0 && replay.mapEmptied === 0, `scanPage read ${replay.seen} elements and analyze released every record`);
+check(/^# Snake Eyes spacing report/.test(replay.text), "buildReport works on issues it was handed rather than on a closure");
+await stageCheck.close();
+
 // ---------- Re-scan closes the overlay and asks the worker for a fresh pass ----------
 // The worker side of this channel is covered in tests/extension.mjs, where Escape proves a
 // message really reaches background.js. Here we prove the button sends the right one.

@@ -3,6 +3,7 @@
 ## 1.1.0 - 2026-09-11
 
 - Single-pass scan: rect and computed style read once per element, 8000-node budget, hidden subtrees skipped
+- overlay.js split into 4 named stages (scanPage, analyze, buildReport, mount) that the tests drive independently
 - Cap applies after the severity sort and is stated in the panel and the report
 - Inline text runs are skipped, and centered stacks are detected from flex alignment or geometry, so neither trips the gap and edge checks
 - Panel: keyboard access (buttons, focus rings, Escape), collapse, bottom sheet on phones, dark mode, fixed typography

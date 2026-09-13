@@ -84,7 +84,7 @@ flowchart LR
 |------|------|
 | `background.js` | The only thing that runs on install. Listens for the click, injects, and cleans up on toggle-off. |
 | `lib/pure.js` | The math with no DOM: tolerance, severity bands, majority value, outliers, sibling kinds. Unit tested. |
-| `overlay.js` | 1 scan of the page (capped at 8000 elements), the 4 checks, the report, the panel. |
+| `overlay.js` | 4 named stages: `scanPage` reads the page once (capped at 8000 elements), `analyze` judges what it read, `buildReport` writes the markdown, `mount` draws the panel. Each runs on its own, and the tests drive them separately. |
 | `panel.css` | The panel and guides, loaded into the shadow root as a constructed stylesheet. |
 | `overlay.css` | 1 rule for the host element so page CSS cannot hide or re-stack it. |
 
