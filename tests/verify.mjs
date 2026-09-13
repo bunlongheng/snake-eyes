@@ -21,6 +21,7 @@ let failed = 0;
 const check = (ok, msg) => { console.log(`${ok ? "PASS" : "FAIL"}  ${msg}`); if (!ok) failed++; };
 
 const browser = await chromium.launch();
+try {
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2, permissions: ["clipboard-read", "clipboard-write"] });
 
 async function inject(page) {
@@ -58,13 +59,35 @@ check(ui.h2 && !!ui.aria, "panel has a heading and an accessible name");
 check(await inShadow(page, () => { const sh = window.__snakeEyes.shadow; const cb = getComputedStyle(sh.querySelector(".snk-btn")), ct = getComputedStyle(sh.querySelector(".snk-tag")); return cb.fontSize === "12px" && cb.fontWeight === "600" && ct.fontSize === "10px"; }), "button and tag typography apply (no invalid font shorthand)");
 
 // click the 3rd item, then keyboard to the 2nd
+const becomes = (p, n) => p.waitForFunction((want) => window.__snakeEyes.shadow.querySelector(".snk-item.snk-current")?.dataset.n === want, String(n), { timeout: 4000 }).then(() => true, () => false);
 await inShadow(page, () => { window.__snakeEyes.shadow.querySelectorAll(".snk-item")[2].click(); });
-await page.waitForFunction(() => window.__snakeEyes.shadow.querySelector(".snk-item.snk-current")?.dataset.n === "3");
-check(true, "clicking an item makes it current and redraws");
+check(await becomes(page, 3), "clicking an item makes it current and redraws");
+check(await inShadow(page, () => window.__snakeEyes.shadow.querySelector(".snk-item.snk-current")?.getAttribute("aria-current") === "true"), "the current item is marked aria-current");
 await inShadow(page, () => { window.__snakeEyes.shadow.querySelectorAll(".snk-item")[1].focus(); });
 await page.keyboard.press("Enter");
-await page.waitForFunction(() => window.__snakeEyes.shadow.querySelector(".snk-item.snk-current")?.dataset.n === "2");
-check(true, "keyboard: focus + Enter activates an item");
+check(await becomes(page, 2), "keyboard: focus + Enter activates an item");
+
+// header controls must stay inside the panel and remain hit-testable. A single nowrap on the
+// title once pushed Collapse and Close outside the box while every other check still passed.
+const headerFits = async (pg, label) => {
+  const r = await inShadow(pg, () => {
+    const sh = window.__snakeEyes.shadow;
+    const panel = sh.querySelector(".snk-panel").getBoundingClientRect();
+    const out = [];
+    for (const b of sh.querySelectorAll(".snk-head button")) {
+      if (getComputedStyle(b).display === "none") continue;
+      const box = b.getBoundingClientRect();
+      const inside = box.left >= panel.left - 1 && box.right <= panel.right + 1 && box.top >= panel.top - 1 && box.bottom <= panel.bottom + 1;
+      const hit = sh.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      if (!inside || !(hit === b || b.contains(hit))) out.push(`${b.className.replace("snk-btn ", "").replace("snk-icon ", "")}${inside ? " unclickable" : " clipped"}`);
+    }
+    return out;
+  });
+  check(r.length === 0, `${label}: every header control sits inside the panel and is clickable${r.length ? " (" + r.join(", ") + ")" : ""}`);
+  const clipped = await inShadow(pg, () => [...window.__snakeEyes.shadow.querySelectorAll(".snk-head > *")].filter((e) => getComputedStyle(e).display !== "none" && e.scrollWidth > e.clientWidth + 1).map((e) => e.className || e.tagName));
+  check(clipped.length === 0, `${label}: no header text is truncated${clipped.length ? " (" + clipped.join(", ") + ")" : ""}`);
+};
+await headerFits(page, "header at 1280px");
 
 // edge badges never overlap
 const overlap = await inShadow(page, () => { const b = [...window.__snakeEyes.shadow.querySelectorAll(".snk-badge")].map((e) => e.getBoundingClientRect()); for (let i = 0; i < b.length; i++) for (let j = i + 1; j < b.length; j++) { const a = b[i], c = b[j]; if (a.left < c.right && c.left < a.right && a.top < c.bottom && c.top < a.bottom) return true; } return false; });
@@ -81,6 +104,7 @@ await inShadow(page, () => { window.__snakeEyes.shadow.querySelector(".snk-all")
 const showAll = await inShadow(page, () => { const sh = window.__snakeEyes.shadow; return { lines: sh.querySelectorAll(".snk-line").length, boxes: sh.querySelectorAll(".snk-box").length, current: sh.querySelectorAll(".snk-current").length }; });
 check(showAll.boxes === 6 && showAll.lines >= 6 && showAll.current === 0, `Show all draws a box per issue (${showAll.boxes}) and ${showAll.lines} guides`);
 if (process.env.SNK_HERO) {
+  await inShadow(page, () => window.__snakeEyes.shadow.activeElement?.blur()); // no stray focus ring in the docs shot
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(1800); // let the Copied label reset
   mkdirSync(join(root, "docs"), { recursive: true });
@@ -103,15 +127,48 @@ check(toggled, "injecting again removes the overlay (toggle)");
 await page.close();
 
 // ---------- other widths: the scan completes and stays sane ----------
-for (const w of [390, 768]) {
+for (const [w, want] of [[390, 6], [768, 6]]) {
   const p = await context.newPage();
   await p.setViewportSize({ width: w, height: 844 });
   await p.goto("file://" + join(here, "fixture.html"));
   const rr = await inject(p);
-  check(rr.issues.length >= 3 && rr.issues.length <= 8, `fixture at ${w}px: scan completes with ${rr.issues.length} issues`);
-  if (w === 390) check(await p.evaluate(() => { const r = window.__snakeEyes.shadow.querySelector(".snk-panel").getBoundingClientRect(); return r.bottom <= innerHeight + 1 && r.height <= innerHeight * 0.5; }), "phone: panel becomes a bottom sheet under half the screen");
+  check(rr.issues.length === want, `fixture at ${w}px: exactly ${want} issues (found ${rr.issues.length})`);
+  await headerFits(p, `header at ${w}px`);
+  if (w === 390) {
+    check(await p.evaluate(() => { const r = window.__snakeEyes.shadow.querySelector(".snk-panel").getBoundingClientRect(); return r.bottom <= innerHeight + 1 && r.height <= innerHeight * 0.5; }), "phone: panel becomes a bottom sheet under half the screen");
+    await inShadow(p, () => { window.__snakeEyes.shadow.querySelector(".snk-collapse").click(); });
+    check(await p.evaluate(() => { const r = window.__snakeEyes.shadow.querySelector(".snk-panel").getBoundingClientRect(); return Math.abs(r.bottom - innerHeight) <= 12; }), "phone: collapsing keeps the sheet at the bottom of the screen");
+  }
   await p.close();
 }
+
+// ---------- the panel goes stale when the viewport changes under it ----------
+const stale = await context.newPage();
+await stale.setViewportSize({ width: 1280, height: 900 });
+await stale.goto("file://" + join(here, "fixture.html"));
+const before = await inject(stale);
+await stale.setViewportSize({ width: 1000, height: 700 });
+const staleOk = await stale.waitForFunction(() => { const sh = window.__snakeEyes.shadow; return !sh.querySelector(".snk-stale").hidden && sh.querySelector(".snk-all").disabled && [...sh.querySelectorAll(".snk-item")].every((b) => b.disabled); }, undefined, { timeout: 4000 }).then(() => true, () => false);
+check(staleOk, "resizing marks the panel stale and disables the measurements it can no longer draw");
+check(/Viewport: 1280x900/.test(await stale.evaluate(() => window.__snakeEyes.report())), "the report still states the viewport it measured, not the new one");
+check(await stale.evaluate(() => window.__snakeEyes.shadow.querySelectorAll(".snk-line").length === 0), "stale guides are cleared rather than left pointing at the old layout");
+void before;
+await stale.close();
+
+// ---------- dark mode ----------
+const darkCtx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+const dark = await darkCtx.newPage();
+await dark.goto("file://" + join(here, "fixture.html"));
+await inject(dark);
+const darkStyle = await inShadow(dark, () => {
+  const sh = window.__snakeEyes.shadow, cs = (sel) => getComputedStyle(sh.querySelector(sel));
+  return { panel: cs(".snk-panel").backgroundColor, copyBg: cs(".snk-copy").backgroundColor, copyFg: cs(".snk-copy").color, tag: cs(".snk-tag").backgroundColor };
+});
+check(darkStyle.panel === "rgb(17, 24, 39)", `dark mode: the panel uses the dark surface (${darkStyle.panel})`);
+check(darkStyle.copyBg !== darkStyle.panel && darkStyle.copyFg !== darkStyle.copyBg, "dark mode: the primary button keeps a visible boundary and readable label");
+await headerFits(dark, "header in dark mode");
+await dark.close();
+await darkCtx.close();
 
 // ---------- clean page: 0 issues, empty state ----------
 const clean = await context.newPage();
@@ -130,9 +187,11 @@ await cap.setContent(`<!doctype html><html><body style="margin:0">${Array.from({
 const cp = await inject(cap);
 check(cp.total > 150 && cp.issues.length === 150 && cp.dropped === cp.total - 150, `cap: ${cp.issues.length} shown of ${cp.total}, ${cp.dropped} dropped`);
 check(/shown of \d+/.test(cp.report) && /capped at 150/.test(cp.report), "cap is stated in the report");
-check(await inShadow(cap, () => /of \d+ issues/.test(window.__snakeEyes.shadow.querySelector(".snk-count").textContent)), "cap is stated in the panel header");
+check(await inShadow(cap, () => { const el = window.__snakeEyes.shadow.querySelector(".snk-count"); return /^150 of 200$/.test(el.textContent) && el.scrollWidth <= el.clientWidth + 1; }), "cap is stated in the panel header without truncating");
 await cap.close();
 
-await browser.close();
+} finally {
+  await browser.close();
+}
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);

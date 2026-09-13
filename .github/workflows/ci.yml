@@ -18,6 +18,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Audit the toolchain (the extension itself ships 0 runtime deps)
+        run: npm audit --audit-level=high
       - name: Version check (manifest.json vs package.json)
         run: npm run check:version
       - name: Lint
@@ -28,5 +30,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
-      - name: Unit + browser tests (fixture, clean page, cap, 3 widths)
+      - name: Unit + browser tests (fixture, clean page, cap, widths, dark mode)
         run: npm test
+      - name: Pack and check the zip holds exactly the extension
+        shell: bash
+        run: |
+          npm run pack
+          unzip -Z1 snake-eyes-*.zip | sort > /tmp/packed.txt
+          cat /tmp/packed.txt
+          diff <(printf 'background.js\nicons/icon-128.png\nicons/icon-16.png\nicons/icon-32.png\nicons/icon-48.png\nlib/pure.js\nmanifest.json\noverlay.css\noverlay.js\npanel.css\n') /tmp/packed.txt

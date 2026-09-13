@@ -15,7 +15,8 @@ const unsupported = (tabId, why) => {
   chrome.action.setTitle({ tabId, title: `Snake Eyes cannot run here: ${why}` });
 };
 
-chrome.action.onClicked.addListener(async (tab) => {
+// Named so a test can drive it directly; the listener below is the only caller in the extension.
+const run = async (tab) => {
   if (!tab.id) return;
   if (!/^https?:|^file:/.test(tab.url || "")) { unsupported(tab.id, "only http, https and file pages"); return; }
   const target = { tabId: tab.id };
@@ -28,7 +29,17 @@ chrome.action.onClicked.addListener(async (tab) => {
     chrome.action.setBadgeText({ tabId: tab.id, text: "" });
     chrome.action.setTitle({ tabId: tab.id, title: "Snake Eyes: audit spacing on this page" });
   } catch (e) {
-    unsupported(tab.id, /file:/.test(tab.url || "") ? "enable Allow access to file URLs on the extension card" : "this page blocks extensions");
+    // Only Chrome's own injection refusals mean the page is off limits. Anything else is our
+    // own bug, and saying "this page blocks extensions" would send the user chasing the wrong thing.
+    const blocked = /^Cannot access|^The extensions gallery|^Extension manifest/.test(e.message || "");
+    const why = /file:/.test(tab.url || "") && blocked
+      ? "enable Allow access to file URLs on the extension card"
+      : blocked
+        ? "this page blocks extensions"
+        : `overlay error: ${e.message || e}`;
+    unsupported(tab.id, why);
     console.warn("snake-eyes: could not inject", e);
   }
-});
+};
+
+chrome.action.onClicked.addListener(run);

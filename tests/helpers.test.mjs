@@ -18,11 +18,18 @@ test("same uses the 2px tolerance inclusively", () => {
   assert.equal(same(10, 13), false);
 });
 
-test("severityFor bands: high at 8, medium at 3, low below", () => {
+test("severityFor bands: high at 8, medium at 5, low below", () => {
   assert.equal(severityFor(LIMITS.sevHigh), "high");
   assert.equal(severityFor(7), "medium");
   assert.equal(severityFor(LIMITS.sevMedium), "medium");
   assert.equal(severityFor(2), "low");
+});
+
+test("the low tier is reachable: a check only fires above TOL, so 3 and 4 must be low", () => {
+  assert.ok(LIMITS.sevMedium > TOL + 1, "sevMedium must leave room above the tolerance");
+  assert.equal(severityFor(TOL + 1), "low");
+  assert.equal(severityFor(4), "low");
+  assert.equal(severityFor(5), "medium");
 });
 
 test("mode picks the majority, the median when all differ, 0 when empty", () => {

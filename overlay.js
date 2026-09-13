@@ -6,16 +6,15 @@
 // the page-level CSS again. window.__snakeEyes (isolated world only) is the test hook.
 (() => {
   const ROOT_ID = "snake-eyes-root";
-  const MARK = "data-snake-eyes";
-  const existing = document.getElementById(ROOT_ID);
-  if (existing && existing.hasAttribute(MARK) && typeof existing.__snkClose === "function") {
-    existing.__snkClose();
+  // window.__snakeEyes lives in the extension's isolated world, so the page cannot forge it.
+  // A page CAN plant an element with our id, hence we never trust the DOM to decide the toggle.
+  if (window.__snakeEyes && typeof window.__snakeEyes.close === "function") {
+    window.__snakeEyes.close();
     return true;
   }
   if (!document.body) return false;
 
-  const { TOL, LIMITS, px, same, severityFor, mode, outliers, sameKind } = globalThis.__snkPure;
-  void mode;
+  const { TOL, LIMITS, px, same, severityFor, outliers, sameKind } = globalThis.__snkPure;
   const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "TEMPLATE", "BR", "HR", "CANVAS", "IFRAME", "OPTION"]);
   const HTML_NS = "http://www.w3.org/1999/xhtml";
 
@@ -31,7 +30,10 @@
     const visible = cs.visibility !== "hidden" && cs.opacity !== "0" && b.width > 1 && b.height > 1;
     const inFlow = cs.position !== "absolute" && cs.position !== "fixed" && cs.display !== "contents";
     info.set(el, { cs, r, visible, inFlow, kids: null, label: null });
-    return visible || cs.overflow === "visible"; // a zero-size box can still have visible overflow
+    // opacity:0 cannot be undone by a child, so skip the whole subtree. visibility:hidden can be,
+    // so keep descending there. A zero-size box can still have visible overflow.
+    if (cs.opacity === "0") return false;
+    return visible || cs.overflow === "visible";
   };
   const stack = [document.body];
   while (stack.length) {
@@ -66,7 +68,7 @@
         if (sib.length > 1) s += `:nth-of-type(${sib.indexOf(e) + 1})`;
       }
       if (depth === 0) {
-        const cls = [...e.classList].filter((c) => /^[a-z][\w-]*$/i.test(c)).slice(0, 2);
+        const cls = [...e.classList].filter((c) => /^[a-z][\w-]*$/i.test(c)).slice(0, LIMITS.maxSelectorClasses);
         if (cls.length) s += "." + cls.join(".");
       }
       parts.unshift(s);
@@ -136,10 +138,11 @@
     const kids = kidsOf(el);
     if (kids.length < 2) continue;
     const rows = groupRows(kids);
+    const sameKids = kinds(kids); // asked by both the stack and the edge check below
 
     // 1a: horizontal gaps inside each row
     for (const row of rows) {
-      if (row.items.length < 3 || !kinds(row.items.map((x) => x.el)) || isInlineRun(el, row.items)) continue;
+      if (row.items.length < LIMITS.minRowItems || !kinds(row.items.map((x) => x.el)) || isInlineRun(el, row.items)) continue;
       const gaps = [];
       for (let i = 1; i < row.items.length; i++) {
         const a = row.items[i - 1].r, b = row.items[i].r;
@@ -156,7 +159,7 @@
     }
 
     // 1b: vertical gaps between rows
-    if (rows.length >= 3 && kinds(kids)) {
+    if (rows.length >= LIMITS.minStackRows && sameKids) {
       const gaps = [];
       for (let i = 1; i < rows.length; i++) {
         const prev = rows[i - 1], cur = rows[i];
@@ -177,7 +180,7 @@
     }
 
     // 2: left and right edge alignment of stacked siblings
-    if (rows.length >= 2 && rows.every((r) => r.items.length === 1) && kinds(kids)) {
+    if (rows.length >= LIMITS.minEdgeRows && rows.every((r) => r.items.length === 1) && sameKids) {
       const items = rows.map((r) => r.items[0]);
       if (!centered(el, items)) {
         let top = Infinity, bottom = -Infinity;
@@ -216,6 +219,8 @@
     }
     if (bits.length) {
       const diff = Math.max(Math.abs(pl - pr), Math.abs(pt - pb));
+      // padding asymmetry is often deliberate (an icon, an optical correction), so it never
+      // outranks a gap or an edge issue no matter how large it is
       const sev = severityFor(diff);
       add({ type: "padding", severity: sev === "high" ? "medium" : sev, el, title: `Asymmetric padding on ${label(el)}`,
         detail: bits.join("; "), expected: "equal padding on opposite sides unless the asymmetry is deliberate", guides });
@@ -276,16 +281,23 @@
   const dropped = Math.max(0, total - LIMITS.maxIssues);
   issues.length = Math.min(total, LIMITS.maxIssues);
   issues.forEach((i, n) => { i.n = n + 1; i.selector = selector(i.el); });
+  // selectors and labels are resolved, so the per-element records (rects + styles for every
+  // node on the page) are dead weight. Each issue already carries its own rect and element.
+  info.clear();
 
   // ---------- report ----------
-  const pageId = location.protocol === "file:" ? `file://${location.pathname}` : `${location.origin}${location.pathname}`;
+  // Captured at scan time: the numbers in the report must describe the layout that was measured,
+  // not whatever the window was resized to afterwards. On file: pages only the basename is used,
+  // so a report pasted into a chat never carries the local directory tree.
+  const scanW = innerWidth, scanH = innerHeight;
+  const pageId = location.protocol === "file:" ? `file:///${location.pathname.split("/").pop()}` : `${location.origin}${location.pathname}`;
   const report = () => {
     const counts = { high: 0, medium: 0, low: 0 };
     issues.forEach((i) => counts[i.severity]++);
     const lines = [
       `# Snake Eyes spacing report`, ``,
       `- Page: ${pageId}`,
-      `- Viewport: ${innerWidth}x${innerHeight}`,
+      `- Viewport: ${scanW}x${scanH}`,
       `- Date: ${new Date().toISOString().slice(0, 10)}`,
       `- Issues: ${issues.length}${dropped ? ` shown of ${total}` : ""} (${counts.high} high, ${counts.medium} medium, ${counts.low} low)`,
     ];
@@ -302,7 +314,6 @@
   const on = (target, type, fn) => target.addEventListener(type, fn, { signal: ac.signal });
   const root = document.createElement("div");
   root.id = ROOT_ID;
-  root.setAttribute(MARK, "1");
   const shadow = root.attachShadow({ mode: "closed" });
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(window.__SNAKE_EYES_CSS__ || "");
@@ -311,12 +322,13 @@
 
   const layer = document.createElement("div");
   layer.className = "snk-layer";
+  layer.setAttribute("aria-hidden", "true"); // pure decoration, never announced
   const sizeLayer = () => { layer.style.width = `${document.documentElement.scrollWidth}px`; layer.style.height = `${document.documentElement.scrollHeight}px`; };
   sizeLayer();
   shadow.appendChild(layer);
 
   const TYPE_LABEL = { gaps: "Gap", align: "Edge", padding: "Padding", rhythm: "Rhythm" };
-  const countText = dropped ? `${issues.length} of ${total} issues` : `${issues.length} issue${issues.length === 1 ? "" : "s"}`;
+  const countText = dropped ? `${issues.length} of ${total}` : `${issues.length} issue${issues.length === 1 ? "" : "s"}`;
   const panel = document.createElement("aside");
   panel.className = "snk-panel";
   panel.setAttribute("aria-label", "Snake Eyes spacing issues");
@@ -361,9 +373,10 @@
       mk(`snk-line snk-vline ${tone}`, { left: `${g.x}px`, top: `${g.y1}px`, height: `${Math.max(1, g.y2 - g.y1)}px` });
       mk(`snk-badge ${tone}`, { left: `${g.x}px`, top: `${(g.y1 + g.y2) / 2}px` }).textContent = g.text;
     } else if (g.kind === "edge") {
-      mk(`snk-line snk-vline snk-edge ${tone}`, { left: `${g.x}px`, top: `${g.y1 - 12}px`, height: `${g.y2 - g.y1 + 24}px` });
+      const pad = LIMITS.edgeGuidePad;
+      mk(`snk-line snk-vline snk-edge ${tone}`, { left: `${g.x}px`, top: `${g.y1 - pad}px`, height: `${g.y2 - g.y1 + pad * 2}px` });
       // expected badge above the box, actual badge below it, so 2 close edges never overlap
-      mk(`snk-badge ${tone}`, { left: `${g.x}px`, top: `${g.bad ? g.y2 + 12 : g.y1 - 12}px` }).textContent = g.text;
+      mk(`snk-badge ${tone}`, { left: `${g.x}px`, top: `${g.bad ? g.y2 + pad : g.y1 - pad}px` }).textContent = g.text;
     }
   };
   const boxNode = (r, active, frag) => {
@@ -374,7 +387,7 @@
   };
   // read nothing from the page here: rects were stored at analysis time, so this is 1 write
   const draw = (items, activeIssue) => {
-    clearGuides(); sizeLayer();
+    sizeLayer(); clearGuides();
     const frag = document.createDocumentFragment();
     for (const i of items) {
       boxNode(i.r, i === activeIssue, frag);
@@ -385,24 +398,27 @@
   };
   const activate = (i) => {
     draw([i], i);
-    list.querySelectorAll(".snk-item").forEach((b) => b.classList.toggle("snk-current", b.dataset.n === String(i.n)));
+    list.querySelectorAll(".snk-item").forEach((b) => {
+      const on = b.dataset.n === String(i.n);
+      b.classList.toggle("snk-current", on);
+      if (on) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
+    });
     i.el.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
   };
   on(panel.querySelector(".snk-all"), "click", () => {
     draw(issues, null);
-    list.querySelectorAll(".snk-item").forEach((b) => b.classList.remove("snk-current"));
+    list.querySelectorAll(".snk-item").forEach((b) => { b.classList.remove("snk-current"); b.removeAttribute("aria-current"); });
   });
   on(panel.querySelector(".snk-copy"), "click", async (ev) => {
     const btn = ev.currentTarget;
     if (!ev.isTrusted && !window.__snakeEyesTest) return; // only a real click may write the clipboard
     try { await navigator.clipboard.writeText(report()); btn.textContent = "Copied"; }
     catch { btn.textContent = "Copy failed"; }
-    setTimeout(() => { btn.textContent = "Copy report"; }, 1600);
+    setTimeout(() => { btn.textContent = "Copy report"; }, LIMITS.copyResetMs);
   });
   on(panel.querySelector(".snk-collapse"), "click", () => { panel.classList.toggle("snk-collapsed"); });
 
   const close = () => { ac.abort(); root.remove(); delete window.__snakeEyes; };
-  root.__snkClose = close;
   on(panel.querySelector(".snk-x"), "click", close);
   on(document, "keydown", (e) => { if (e.key === "Escape") close(); });
   let resizeTimer = 0;
@@ -412,8 +428,11 @@
     resizeTimer = setTimeout(() => {
       panel.querySelector(".snk-stale").hidden = false;
       panel.querySelector(".snk-legend").hidden = true;
+      // every measurement on screen belongs to the old viewport, so nothing here may be replayed.
+      // Copy stays live on purpose: the report states the viewport it was measured at.
       list.querySelectorAll(".snk-item").forEach((b) => { b.disabled = true; });
-    }, 150);
+      panel.querySelector(".snk-all").disabled = true;
+    }, LIMITS.resizeDebounceMs);
   });
 
   document.documentElement.appendChild(root);

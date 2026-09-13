@@ -26,11 +26,11 @@ Nothing runs until you click. The extension asks only for `activeTab` and `scrip
 | Padding | Left vs right and top vs bottom padding on containers | Dashed spans inside the box with both numbers |
 | Rhythm | Top and bottom padding across page sections, and the content inset in each section | Red span on the section that breaks the pattern, with the expected value |
 
-Everything is measured from the rendered layout at the current viewport, tolerance 2px. Resize and click again to audit another width.
+Everything is measured from the rendered layout at the current viewport, tolerance 2px. Resize and the panel greys out, because every number on screen belongs to the old layout. Click the icon again to audit the new width.
 
 ## The panel
 
-- Issues sorted high to low. High is 8px or more off, medium 3 to 7, low under 3. The list caps at 150, most severe first, and says so.
+- Issues sorted high to low. High is 8px or more off, medium 5 to 7, low 3 to 4. Anything inside the 2px tolerance is not reported at all. The list caps at 150, most severe first, and says so.
 - Click an issue (or Tab to it and press Enter): the page scrolls to it, the element gets a red outline and its guides appear.
 - **Show all** draws every guide at once. **Copy report** puts the markdown below on the clipboard. `Esc` closes.
 - On a phone-sized window the panel becomes a bottom sheet. It follows your light or dark theme.
@@ -43,19 +43,19 @@ Everything is measured from the rendered layout at the current viewport, toleran
 
 - Page: https://example.dev/pricing
 - Viewport: 1280x900
-- Date: 2026-09-11
-- Issues: 6 (3 high, 2 medium, 1 low)
+- Date: 2026-09-13
+- Issues: 6 (3 high, 3 medium, 0 low)
 
 Fix each item below in the source, then re-run Snake Eyes to confirm 0 issues. Selectors are relative to <body>.
 
-## 1. Uneven horizontal gaps in <div> (high)
-- Selector: `section#features > div.wrap > div.cards`
-- Found: 4 items in a row, gaps 24, 24, 31px (most are 24px)
-- Expected: 24px between every item
+## 1. Uneven vertical gaps in <div> "Paragraph 1 Paragraph 2 (28p..." (high)
+- Selector: `section#stack > div > div.stack`
+- Found: 4 stacked blocks, gaps 16, 28, 16px (most are 16px)
+- Expected: 16px between every block
 
 ## 2. Section top padding 48px, others use 64px (high)
 - Selector: `section#hero`
-- Found: <section> "Hero Section with 48px top..." breaks the vertical rhythm shared by 6 other sections
+- Found: <section> "Hero Section with 48px top p..." breaks the vertical rhythm shared by 6 other sections
 - Expected: padding-top: 64px
 ```
 
@@ -65,7 +65,7 @@ Paste it to your coding agent as is: every item has a selector, what was found, 
 
 ```mermaid
 flowchart LR
-    C[Click the icon] --> I[background.js injects lib/pure.js + overlay.js into the tab]
+    C[Click the icon] --> I[background.js: insert overlay.css, hand over panel.css, run lib/pure.js + overlay.js]
     I --> S[1 pass over the DOM: rect + computed style per element, then 4 checks]
     S --> U[Closed shadow root: side panel + a page-sized guide layer]
 ```
@@ -91,12 +91,15 @@ The overlay adds 1 element to the page, `#snake-eyes-root`, with a closed shadow
 ```bash
 npm install
 npx playwright install chromium   # once
-npm test          # unit tests for lib/pure.js, then headless Chromium against 3 pages at 3 widths
-npm run lint      # eslint, zero warnings
-npm run hero      # refresh docs/hero.png from the fixture
+npm test            # unit tests for lib/pure.js, then headless Chromium against 3 pages
+npm run lint        # eslint, zero warnings
+npm run check:version   # manifest.json and package.json must agree
+npm run pack        # zip just the files Chrome needs, for a release or a store upload
+npm run icons       # regenerate the icon PNGs
+npm run hero        # refresh docs/hero.png from the fixture
 ```
 
-`tests/fixture.html` plants exactly 1 mistake per check (6 in all) next to prose with inline links and deep nesting that must not be flagged. The browser test asserts exactly those 6 come back, that every selector resolves to its element, that the panel works by mouse and keyboard, that `tests/clean.html` yields 0 issues, and that a 200-issue page is capped at 150 most severe first. CI runs the same on every push on Node 22 with pinned actions. A `v*` tag runs the suite again and attaches a zip of the extension to the GitHub release.
+`tests/fixture.html` plants exactly 1 mistake per check (6 in all) next to prose with inline links and deep nesting that must not be flagged. The browser test asserts exactly those 6 come back, that every selector resolves to its element, that the panel works by mouse and keyboard, that every header control stays inside the panel and clickable at 3 widths and in dark mode, that a resize greys the panel out, that `tests/clean.html` yields 0 issues, and that a 200-issue page is capped at 150 most severe first. The fixture also runs at 390px and 768px. CI runs the same on every push to main and every pull request, on Node 22 with SHA-pinned actions. A `v*` tag runs the suite again and attaches a zip of the extension to the GitHub release.
 
 ## Decisions
 
