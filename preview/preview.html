@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Snake Eyes - preview harness</title>
+<!-- The overlay's page-level CSS. background.js injects this with chrome.scripting.insertCSS;
+     here it is just a stylesheet, which is the whole point of the harness. -->
+<link rel="stylesheet" href="../overlay.css">
+<style>
+  :root { color-scheme: light dark; --ink: #14161a; --dim: #6b7280; --line: #e4e6ea; --bg: #fbfbfc; --card: #fff; --accent: #c0392b; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #e8eaee; --dim: #9aa1ab; --line: #2a2e35; --bg: #101216; --card: #171a1f; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: var(--card); border-bottom: 1px solid var(--line); }
+  .bar h1 { font-size: 14px; margin: 0; letter-spacing: 0.04em; text-transform: uppercase; }
+  .bar .hint { color: var(--dim); font-size: 13px; margin-left: auto; }
+  button.run { font: inherit; font-weight: 600; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+  main { max-width: 880px; margin: 0 auto; padding: 28px 20px 80px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  h2 { font-size: 17px; margin: 0 0 10px; }
+  p { margin: 0 0 12px; color: var(--dim); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+  .stack > * + * { margin-top: 14px; }
+
+  /* Deliberately inconsistent spacing - this is a FIXTURE, not a design. The auditor exists
+     to find these, so a perfectly spaced page would prove nothing. Tolerance is 2px, so every
+     drift here clears it: the row gaps differ by 7px and the tile padding by 6px. */
+  .cards { display: flex; margin-top: 24px; }
+  .cards .card { width: 200px; margin-right: 24px; }
+  .cards .card:nth-child(3) { margin-right: 31px; }
+  .cards .card:last-child { margin-right: 0; }
+
+  .list { margin-top: 24px; }
+  .list > div { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .list > div:nth-child(2) { margin-left: 8px; }
+  .list > div:nth-child(4) { margin-bottom: 20px; }
+
+  .tiles { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+  .tiles .card { width: 260px; }
+  .tiles .card:nth-child(2) { padding: 24px; }
+  .tiles .card:nth-child(5) { padding: 12px; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>Snake Eyes</h1>
+    <button class="run" id="run">Run audit</button>
+    <span class="hint">Same overlay the extension injects. Click again to toggle. Add <code>?auto=1</code> to run on load.</span>
+  </div>
+
+  <main>
+    <section class="stack">
+      <h2>Spacing audit harness</h2>
+      <p>This page loads <code>lib/pure.js</code> and <code>overlay.js</code> exactly the way the service worker does, minus Chrome. The blocks below carry uneven gaps on purpose so the audit has something to report.</p>
+      <div class="row">
+        <span class="chip">Consistent</span><span class="chip">Nudged</span><span class="chip">Consistent</span><span class="chip">Nudged</span>
+      </div>
+    </section>
+
+    <section class="cards">
+      <div class="card">Card</div>
+      <div class="card">Card</div>
+      <div class="card">Gap is 31 here</div>
+      <div class="card">Card</div>
+    </section>
+
+    <section class="list">
+      <div>Row one</div>
+      <div>Row two, nudged 8px right</div>
+      <div>Row three</div>
+      <div>Row four, 20px below instead of 12</div>
+      <div>Row five</div>
+    </section>
+
+    <section class="tiles">
+      <div class="card">Even padding</div>
+      <div class="card">Padding 24</div>
+      <div class="card">Even padding</div>
+      <div class="card">Even padding</div>
+      <div class="card">Padding 12</div>
+      <div class="card">Even padding</div>
+    </section>
+
+  </main>
+
+<script type="module">
+  // background.js does three things before overlay.js runs: inject overlay.css (the <link>
+  // above), hand the panel stylesheet over on window.__SNAKE_EYES_CSS__, and load pure.js
+  // then overlay.js. Reproduce exactly that, so the harness exercises the shipped code path.
+  const load = (src) =>
+    new Promise((ok, no) => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = () => { s.remove(); ok(); };
+      s.onerror = () => no(new Error("failed to load " + src));
+      document.head.appendChild(s);
+    });
+
+  const panelCss = await (await fetch("../panel.css")).text();
+  await load("../lib/pure.js");
+
+  // overlay.js is an IIFE that runs on load and toggles itself off when run again, so
+  // re-injecting the file IS the toggle - the same thing the toolbar button does.
+  async function toggle() {
+    window.__SNAKE_EYES_CSS__ = panelCss;
+    await load("../overlay.js");
+  }
+
+  document.getElementById("run").addEventListener("click", toggle);
+  if (new URLSearchParams(location.search).has("auto")) {
+    window.__snakeEyesTest = true; // skip the splash delay, as the tests do
+    toggle();
+  }
+</script>
+</body>
+</html>

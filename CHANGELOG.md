@@ -20,6 +20,11 @@
   specificity, so the author rule making that row a flexbox beat it and the panel showed layer
   options with Ruler switched off.
 
+- Docking now reflows position:fixed elements as well. Narrowing the page moved normal content,
+  but fixed headers, toasts and cookie bars anchor to the viewport, so they stayed full width and
+  slid under the panel. A transform on body makes body their containing block, which brought 9
+  spilling elements on a real site down to 3, the rest being marquees that are wider than the
+  screen on purpose.
 - Docked panel. On a window 1200px or wider the page gives up a 20% strip instead of hiding
   underneath the panel, the way devtools docks to a side, and takes its width back on close. The
   scan runs after the dock lands, so every number describes the layout you can actually see, and

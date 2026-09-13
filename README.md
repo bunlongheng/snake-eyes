@@ -111,6 +111,29 @@ The overlay adds 1 element to the page, `#snake-eyes-root`, with a closed shadow
 - Nothing leaves the browser. No network requests, no storage, no analytics.
 - The report you copy contains the page's origin and path, your viewport size, element selectors and short text labels. That is all.
 
+## Preview harness
+
+```bash
+npm run dev         # serves the repo on http://localhost:3048
+# open http://localhost:3048/preview/preview.html        (click "Run audit" to toggle)
+# open http://localhost:3048/preview/preview.html?auto=1 (runs on load, for scripts and agents)
+```
+
+`preview/preview.html` runs the real overlay as an ordinary web page, with no extension
+installed and no Chrome APIs present. It reproduces exactly what the service worker does
+before injection: link `overlay.css`, hand `panel.css` over on `window.__SNAKE_EYES_CSS__`,
+then load `lib/pure.js` and `overlay.js`. Re-injecting `overlay.js` is the toggle, which is
+what the toolbar button does too, so the button here is the same code path.
+
+The page carries deliberate spacing drift, well past the 2px tolerance, so an audit always has
+something to report: a card row with one 31px gap among 24s, a list row nudged 8px right, one
+20px gap among 12s, and two tiles with odd padding. A run that reports 0 issues means something
+broke. This is a fixture, not a design - the uneven spacing is the point.
+
+Use this for quick iteration and for anything driving the overlay from a script. It does not
+replace `npm test`, which also loads the packed extension and covers the manifest, the CSS
+hand-off and the service worker - none of which a plain page can exercise.
+
 ## Tests
 
 ```bash

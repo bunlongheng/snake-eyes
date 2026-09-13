@@ -3,9 +3,12 @@
   "version": "1.2.0",
   "private": true,
   "description": "Chrome extension that spots inconsistent spacing on any page and hands you an agent-ready report.",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "node --test tests/helpers.test.mjs && node tests/verify.mjs && node tests/extension.mjs",
+    "dev": "python3 -m http.server 3048 --bind 0.0.0.0",
     "hero": "SNK_HERO=1 node tests/verify.mjs",
     "lint": "eslint --max-warnings 0 overlay.js background.js lib tests scripts eslint.config.mjs",
     "check:version": "node scripts/check-version.mjs",

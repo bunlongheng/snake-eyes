@@ -181,6 +181,26 @@ await headerFits(cramped, "header in a 300px panel");
 check(await inShadow(cramped, () => window.__snakeEyes.shadow.querySelector(".snk-head").getBoundingClientRect().height > 40), "a panel too narrow for 1 row wraps the header instead of clipping it");
 await cramped.close();
 
+// ---------- docking must reflow fixed elements too ----------
+// Narrowing the page reflows normal content, but position:fixed anchors to the viewport, so a
+// sticky header or a cookie bar stayed full width and slid under the panel.
+const fixedBar = await context.newPage();
+await fixedBar.setViewportSize({ width: 1600, height: 900 });
+await fixedBar.setContent(`<!doctype html><html><body style="margin:0;height:3000px">
+  <div id="bar" style="position:fixed;top:0;left:0;right:0;height:60px;background:#123"></div>
+  <div id="flow" style="height:200px;background:#eee"></div></body></html>`);
+await inject(fixedBar);
+const fit = await fixedBar.evaluate(() => {
+  const page = document.documentElement.getBoundingClientRect().width;
+  const bar = document.getElementById("bar").getBoundingClientRect();
+  const flow = document.getElementById("flow").getBoundingClientRect();
+  return { docked: document.documentElement.classList.contains("snk-docked"), page: Math.round(page), bar: Math.round(bar.right), flow: Math.round(flow.right) };
+});
+check(fit.docked, "a 1600px window docks");
+check(fit.flow <= fit.page + 1, `normal content reflows inside the docked page (${fit.flow} vs ${fit.page})`);
+check(fit.bar <= fit.page + 1, `a position:fixed bar reflows too instead of sliding under the panel (${fit.bar} vs ${fit.page})`);
+await fixedBar.close();
+
 // ---------- the panel goes stale when the viewport changes under it ----------
 const stale = await context.newPage();
 await stale.setViewportSize({ width: 1280, height: 900 });

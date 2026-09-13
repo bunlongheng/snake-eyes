@@ -5,6 +5,11 @@
    the way devtools docks to a side. The scan runs AFTER this lands, so every number describes
    the layout you can actually see. Phones get a bottom sheet instead, so they never dock. */
 html.snk-docked { width: calc(100% - clamp(300px, 20%, 484px)) !important; min-width: 0 !important; overflow-x: hidden !important; }
+/* Narrowing html reflows normal content, but position:fixed elements anchor to the viewport, so
+   headers, toasts and cookie bars stayed full width and slid under the panel. A transform on body
+   makes body the containing block for its fixed descendants, so they fit the narrowed page too.
+   It goes on body and not on html, or our own panel would be trapped inside the page as well. */
+html.snk-docked > body { transform: translateZ(0) !important; width: 100% !important; }
 @media (max-width: 600px) { html.snk-docked { width: 100% !important; } }
 
 /* Night vision tints the page itself. The filter goes on body, never on html: the overlay root is
