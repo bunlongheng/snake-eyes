@@ -443,6 +443,7 @@
       // and a 5th control wraps the header onto a second row.
       panel.querySelector(".snk-rescan").hidden = false;
       panel.querySelector(".snk-all").hidden = true;
+      panel.querySelector(".snk-count").hidden = true; // that tally described the old layout too
       // every measurement on screen belongs to the old viewport, so nothing here may be replayed.
       // Copy stays live on purpose: the report states the viewport it was measured at.
       list.querySelectorAll(".snk-item").forEach((b) => { b.disabled = true; });
