@@ -1,4 +1,10 @@
 /* Page-level host element only. Everything else lives inside the closed shadow root and is
    styled by panel.css, which background.js hands to overlay.js as text. The !important keeps
    a page stylesheet from hiding or re-stacking the overlay. */
+/* Docked mode: the page gives up the strip the panel sits in rather than hiding underneath it,
+   the way devtools docks to a side. The scan runs AFTER this lands, so every number describes
+   the layout you can actually see. Phones get a bottom sheet instead, so they never dock. */
+html.snk-docked { width: calc(100% - clamp(300px, 20%, 484px)) !important; min-width: 0 !important; overflow-x: hidden !important; }
+@media (max-width: 600px) { html.snk-docked { width: 100% !important; } }
+
 #snake-eyes-root { all: initial !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: 2147483646 !important; display: block !important; }

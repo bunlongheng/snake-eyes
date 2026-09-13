@@ -74,7 +74,7 @@
 
 /* the panel */
 .snk-panel:focus-visible { outline: 2px solid var(--snk-focus); outline-offset: -2px; }
-.snk-panel { position: fixed; top: 12px; right: 12px; bottom: 12px; width: 460px;  /* measured: the header needs 450px to show its name, count and 4 controls in full */ max-width: calc(100vw - 24px); display: flex; flex-direction: column; background: var(--snk-bg); color: var(--snk-fg); border: 1px solid var(--snk-line); border-radius: 14px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25); font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; font-size: 13px; line-height: 1.45; z-index: 2; overflow: hidden; }
+.snk-panel { position: fixed; top: 12px; right: 12px; bottom: 12px; width: calc(clamp(300px, 20%, 484px) - 24px); /* the docked strip minus its 12px gutters; overlay.css holds the twin */ max-width: calc(100vw - 24px); display: flex; flex-direction: column; background: var(--snk-bg); color: var(--snk-fg); border: 1px solid var(--snk-line); border-radius: 14px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25); font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; font-size: 13px; line-height: 1.45; z-index: 2; overflow: hidden; }
 .snk-panel.snk-collapsed { bottom: auto; }
 .snk-panel.snk-collapsed .snk-list, .snk-panel.snk-collapsed .snk-foot { display: none; }
 .snk-panel.snk-collapsed .snk-collapse svg { transform: rotate(180deg); }
@@ -100,6 +100,10 @@
 /* Holds the buttons against the right edge. A margin on the count pill used to do this, which
    broke the moment the stale state hid that pill and slid every control 134px left. */
 .snk-spacer { flex: 1 1 0; min-width: 0; }
+/* The controls are their own row on purpose. At a docked width they cannot share a line with the
+   name and the count, and a row that wraps by accident looks broken where one that wraps by
+   design looks like a toolbar. */
+.snk-tools { flex: 1 0 100%; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
 .snk-count-ok { color: var(--snk-low-fg); background: var(--snk-low-bg); }
 .snk-btn { flex-shrink: 0; font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--snk-line); background: var(--snk-bg); color: var(--snk-fg); cursor: pointer; white-space: nowrap; }
 .snk-btn:hover { background: var(--snk-hover); }

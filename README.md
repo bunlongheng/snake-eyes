@@ -47,6 +47,13 @@ A spacing auditor is only useful if you trust its silence, so these are skipped 
 
 ## The panel
 
+On a window 1200px or wider the panel docks: the page narrows to about 80% and the panel takes the
+strip beside it, so nothing is hidden behind it and the guides are never covered. The page gets its
+width back when you close. Because the scan runs after the dock, the report quotes the width it
+actually measured. Narrower windows keep a floating panel instead, since shrinking them would cross
+a breakpoint and change the layout you were trying to audit.
+
+
 - Issues sorted high to low. High is 8px or more off, medium 5 to 7, low 3 to 4. Anything inside the 2px tolerance is not reported at all. The list caps at 150, most severe first, and says so.
 - Click an issue (or Tab to it and press Enter): the page scrolls to it, the element gets a red outline and its guides appear.
 - **Show all** draws every guide at once. **Copy report** puts the markdown below on the clipboard. `Esc` closes and hands focus back where it was.

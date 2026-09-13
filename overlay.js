@@ -318,7 +318,7 @@
   // not whatever the window was resized to afterwards. On file: pages only the basename is used,
   // so a report pasted into a chat never carries the local directory tree.
   function buildReport(issues, { total, dropped, scanTruncated }) {
-    const scanW = innerWidth, scanH = innerHeight;
+    const scanW = Math.round(document.documentElement.getBoundingClientRect().width), scanH = innerHeight;
     const pageId = location.protocol === "file:" ? `file:///${location.pathname.split("/").pop()}` : `${location.origin}${location.pathname}`;
     return () => {
       const counts = { high: 0, medium: 0, low: 0 };
@@ -372,13 +372,15 @@
         <h2 class="snk-title-h">Snake Eyes <span class="snk-ver">v${VERSION}</span></h2>
         <span class="snk-count${issues.length ? "" : " snk-count-ok"}"></span>
         <span class="snk-spacer"></span>
+      <div class="snk-tools">
         <button class="snk-btn snk-rescan" type="button" title="Measure the page again as it looks right now: open a modal, a menu or a card first">Re-scan</button>
         <button class="snk-btn snk-all" type="button" title="Draw every guide at once">Show all</button>
-      <button class="snk-btn snk-xray" type="button" title="Reveal every box on the page, shaded by nesting depth" aria-pressed="false">X-ray</button>
-        <button class="snk-btn snk-copy" type="button" title="Copy the report for an agent">Copy report</button>
+        <button class="snk-btn snk-xray" type="button" title="Reveal every box on the page, shaded by nesting depth" aria-pressed="false">X-ray</button>
+        <button class="snk-btn snk-copy" type="button" title="Copy the report for an agent">Copy</button>
         <button class="snk-icon snk-collapse" type="button" title="Collapse the panel" aria-label="Collapse"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
         <button class="snk-icon snk-x" type="button" title="Close (Esc)" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-      </header>
+      </div>
+    </header>
       <ol class="snk-list"></ol>
       <footer class="snk-foot"><span class="snk-legend">Click an issue to jump to it. Red = off, green = the value the siblings agree on.</span><span class="snk-stale" hidden>Viewport changed. Re-scan to measure this size.</span></footer>`;
     panel.querySelector(".snk-count").textContent = countText;
@@ -464,7 +466,7 @@
       if (!ev.isTrusted && !window.__snakeEyesTest) return; // only a real click may write the clipboard
       try { await navigator.clipboard.writeText(report()); btn.textContent = "Copied"; }
       catch { btn.textContent = "Copy failed"; }
-      setTimeout(() => { btn.textContent = "Copy report"; }, LIMITS.copyResetMs);
+      setTimeout(() => { btn.textContent = "Copy"; }, LIMITS.copyResetMs);
     });
     on(panel.querySelector(".snk-collapse"), "click", () => { panel.classList.toggle("snk-collapsed"); });
     on(panel.querySelector(".snk-rescan"), "click", () => { close(false); tellWorker("rescan"); });
@@ -519,6 +521,7 @@
     const close = (notify = true) => {
       ac.abort();
       root.remove();
+      document.documentElement.classList.remove("snk-docked"); // give the page its width back
       delete window.__snakeEyes;
       // hand focus back where it was rather than dropping the keyboard user on <body>
       if (returnFocusTo && returnFocusTo.isConnected && typeof returnFocusTo.focus === "function") returnFocusTo.focus({ preventScroll: true });
@@ -578,10 +581,17 @@
   }
 
   // ---------- the run ----------
+  // Dock first, then measure. Shrinking the page after the scan would leave every rect describing
+  // a layout the panel is now covering.
+  // Docking narrows the page, which can cross a responsive breakpoint and change the very layout
+  // being audited. Only wide windows have room to give up a strip and still be the same design.
+  const canDock = innerWidth >= LIMITS.dockMinWidth;
+  if (canDock) document.documentElement.classList.add("snk-docked");
   const splash = showSnake();
   // a second click, or Escape, must cancel a scan in flight, so the handle exists from frame 1
   const splashAc = new AbortController();
-  const cancel = () => { splashAc.abort(); splash.root.remove(); delete window.__snakeEyes; tellWorker("closed"); };
+  const undock = () => document.documentElement.classList.remove("snk-docked");
+  const cancel = () => { splashAc.abort(); splash.root.remove(); undock(); delete window.__snakeEyes; tellWorker("closed"); };
   window.__snakeEyes = { ready: false, close: cancel };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && (e.isTrusted || window.__snakeEyesTest)) cancel(); }, { signal: splashAc.signal });
 

@@ -186,7 +186,9 @@ check(await inShadow(stale, () => window.__snakeEyes.shadow.querySelector(".snk-
 const headAfter = await inShadow(stale, () => window.__snakeEyes.shadow.querySelector(".snk-head").getBoundingClientRect().height);
 check(headAfter <= headBefore + 1, `showing Re-scan does not grow the header (${headBefore}px to ${headAfter}px)`);
 check(await inShadow(stale, () => { const sh = window.__snakeEyes.shadow; return sh.querySelector(".snk-rescan").getBoundingClientRect().width > 0 && /Re-scan/.test(sh.querySelector(".snk-stale").textContent); }), "the stale notice names the Re-scan button that fixes it");
-check(/Viewport: 1280x900/.test(await stale.evaluate(() => window.__snakeEyes.report())), "the report still states the viewport it measured, not the new one");
+// The docked page is narrower than the window, so the report must quote the page, not the window.
+const measuredAt = Number(await stale.evaluate(() => window.__snakeEyes.report().match(/- Viewport: (\d+)x/)[1]));
+check(measuredAt > 0 && measuredAt < 1280, `the report states the docked width it measured (${measuredAt}px), not the window or the resized one`);
 check(await stale.evaluate(() => window.__snakeEyes.shadow.querySelectorAll(".snk-line").length === 0), "stale guides are cleared rather than left pointing at the old layout");
 void before;
 await stale.close();

@@ -2,6 +2,16 @@
 
 ## 1.2.0 - 2026-09-13
 
+- Docked panel. On a window 1200px or wider the page gives up a 20% strip instead of hiding
+  underneath the panel, the way devtools docks to a side, and takes its width back on close. The
+  scan runs after the dock lands, so every number describes the layout you can actually see, and
+  the report quotes the docked width rather than the window width. Narrower windows keep the
+  floating panel, because shrinking them would cross a breakpoint and change the design being
+  audited.
+- Controls moved to their own toolbar row. At a docked width they cannot share a line with the
+  name and the count, and a row that wraps by accident looks broken where one that wraps by design
+  looks like a toolbar.
+
 - Edge check compares block boxes only. Inline and inline-block elements start wherever the words
   reach them, so code chips inside a paragraph landed on separate lines, looked like a stack of
   siblings, and were reported for not sharing a left edge they were never meant to share.
