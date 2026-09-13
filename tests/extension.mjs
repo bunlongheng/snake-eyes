@@ -62,9 +62,24 @@ try {
   // The manifest asks for activeTab, not tabs, so chrome.tabs.query hands back ids but no urls.
   // A real toolbar click passes a tab that carries its url, so the test builds the same shape.
   const tabId = await worker.evaluate(async () => (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0].id);
-  const click = async (tab = { id: tabId, url }) => {
+  // The overlay shows a scanning animation before the panel exists, so every step waits for the
+  // real state rather than a guessed number of milliseconds.
+  const inIsolated = async (fn) => {
+    const [res] = await worker.evaluate(async ({ id, src }) => chrome.scripting.executeScript({ target: { tabId: id }, func: new Function(`return (${src})()`) }), { id: tabId, src: fn.toString() });
+    return res && res.result;
+  };
+  const settled = async (want) => {
+    for (let i = 0; i < 60; i++) {
+      const ready = await inIsolated(() => !!(window.__snakeEyes && window.__snakeEyes.ready));
+      const gone = await page.evaluate(() => !document.getElementById("snake-eyes-root"));
+      if (want === "on" ? ready : gone) return true;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return false;
+  };
+  const click = async (tab = { id: tabId, url }, want = "on") => {
     await worker.evaluate(async (t) => { await run(t); }, tab);
-    await page.waitForTimeout(600);
+    await settled(want);
   };
 
   await click();
@@ -80,7 +95,7 @@ try {
   const title = await worker.evaluate((id) => chrome.action.getTitle({ tabId: id }), tabId);
   check(!/cannot run here/.test(title), `the action title reports success (${title})`);
 
-  await click();
+  await click(undefined, "off");
   const off = await page.evaluate(() => ({ mounted: !!document.getElementById("snake-eyes-root"), styled: getComputedStyle(document.createElement("div")).position }));
   check(!off.mounted, "clicking again removes the overlay");
   const leftover = await page.evaluate(() => {
@@ -96,7 +111,7 @@ try {
   // Escape closes from inside the page; background.js must still drop the injected CSS.
   await click();
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(700);
+  await settled("off");
   const afterEsc = await page.evaluate(() => {
     const probe = document.createElement("div");
     probe.id = "snake-eyes-root";
@@ -118,9 +133,9 @@ try {
       func: () => { const sh = window.__snakeEyes.shadow; sh.querySelector(".snk-rescan").hidden = false; sh.querySelector(".snk-rescan").click(); },
     });
   }, tabId);
-  await page.waitForTimeout(1200);
+  await settled("on");
   check(await page.evaluate(() => !!document.getElementById("snake-eyes-root")), "Re-scan tears the overlay down and brings it straight back");
-  await click();
+  await click(undefined, "off");
   const afterRescan = await page.evaluate(() => {
     const probe = document.createElement("div");
     probe.id = "snake-eyes-root";

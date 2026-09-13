@@ -1,6 +1,6 @@
 {
   "name": "snake-eyes",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Chrome extension that spots inconsistent spacing on any page and hands you an agent-ready report.",
   "engines": { "node": ">=22" },

@@ -278,7 +278,7 @@ const o = await inject(other);
 const otext = o.issues.map((i) => `${i.title} | ${i.detail}`).join("\n");
 check(o.issues.length === 3, `fixture2: exactly the 3 planted issues (found ${o.issues.length})`);
 check(/Right edge off by 6px/.test(otext), "right edge: the item that stops 6px short");
-check(/top 16px vs bottom 24px/.test(otext), "padding: top against bottom on a tall container");
+check(/left 44px vs right 20px/.test(otext), "padding: uneven sides on a box no sibling matches");
 check(/Section bottom padding 24px, others use 56px/.test(otext), "rhythm: the section that ends early");
 await other.close();
 

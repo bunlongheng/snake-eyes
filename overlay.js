@@ -15,6 +15,9 @@
   if (!document.body) return false;
 
   const { TOL, LIMITS, px, same, severityFor, outliers, sameKind } = globalThis.__snkPure;
+  // chrome is absent when the tests inject this directly, so every call is guarded.
+  const VERSION = (() => { try { return chrome.runtime.getManifest().version; } catch { return "dev"; } })();
+  const tellWorker = (type) => { try { if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type }); } catch { /* worker asleep or not an extension context */ } };
   const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "TEMPLATE", "BR", "HR", "CANVAS", "IFRAME", "OPTION"]);
   const HTML_NS = "http://www.w3.org/1999/xhtml";
 
@@ -138,6 +141,8 @@
     const hGuide = (x1, x2, y, v, bad) => ({ kind: "h", x1, x2, y, text: `${v}px`, bad });
     const vGuide = (y1, y2, x, text, bad) => ({ kind: "v", y1, y2, x, text, bad });
     const edgeGuide = (x, y1, y2, text, bad) => ({ kind: "edge", x, y1, y2, text, bad });
+  // a filled band over a real region (a padding strip), so the space itself is visible, not just a line
+  const band = (x, y, w, h, text, bad) => ({ kind: "band", x, y, w, h, text, bad });
 
     // ---------- analysis ----------
     const issues = [];
@@ -211,32 +216,39 @@
       }
     }
 
-    // 3: asymmetric padding on containers (sections belong to the rhythm check)
-    for (const el of all) {
-      if (el.tagName === "SECTION" || kidsOf(el).length === 0) continue;
-      const { cs, r } = get(el);
-      if (r.width < LIMITS.minPadW || r.height < LIMITS.minPadH) continue;
-      const pl = px(cs.paddingLeft), pr = px(cs.paddingRight), pt = px(cs.paddingTop), pb = px(cs.paddingBottom);
-      const guides = [], bits = [];
-      if (!same(pl, pr) && Math.max(pl, pr) > 0) {
-        bits.push(`left ${pl}px vs right ${pr}px`);
-        guides.push(hGuide(r.left, r.left + pl, r.top + r.height / 2, pl, pl > pr), hGuide(r.right - pr, r.right, r.top + r.height / 2, pr, pr > pl));
-      }
-      if (!same(pt, pb) && Math.max(pt, pb) > 0 && r.height >= LIMITS.minPadHVertical) {
-        bits.push(`top ${pt}px vs bottom ${pb}px`);
-        guides.push(vGuide(r.top, r.top + pt, r.left + r.width / 2, `${pt}px`, pt > pb), vGuide(r.bottom - pb, r.bottom, r.left + r.width / 2, `${pb}px`, pb > pt));
-      }
-      if (bits.length) {
-        const diff = Math.max(Math.abs(pl - pr), Math.abs(pt - pb));
-        // padding asymmetry is often deliberate (an icon, an optical correction), so it never
-        // outranks a gap or an edge issue no matter how large it is
-        const sev = severityFor(diff);
-        add({ type: "padding", severity: sev === "high" ? "medium" : sev, el, title: `Asymmetric padding on ${label(el)}`,
-          detail: bits.join("; "), expected: "equal padding on opposite sides unless the asymmetry is deliberate", guides });
-      }
-    }
+    // 3: padding that disagrees with its own siblings.
+  // This used to report any box whose padding was not symmetric, which was wrong in principle and
+  // catastrophic in practice: on a real marketing page 41 of 43 findings were this check, and every
+  // one was deliberate. A card with more room at the bottom than the top is a design decision, and
+  // so is a 3px optical nudge under a heading. What is NOT a decision is 1 card in a row of 4 with
+  // padding the other 3 do not share. So: vertical padding is no longer compared at all (section
+  // rhythm already covers vertical spacing), and horizontal padding is only reported when the
+  // element's own same-kind siblings disagree with it.
+  const padOf = (el) => { const { cs } = get(el); return [px(cs.paddingLeft), px(cs.paddingRight)]; };
+  for (const el of all) {
+    if (el.tagName === "SECTION" || kidsOf(el).length === 0) continue;
+    const { r } = get(el);
+    if (r.width < LIMITS.minPadW || r.height < LIMITS.minPadH) continue;
+    const [pl, pr] = padOf(el);
+    if (same(pl, pr) || Math.max(pl, pr) === 0) continue;
 
-    // 4: section rhythm - top/bottom padding and content inset across page sections
+    // the design-system escape hatch: if same-kind siblings use this exact padding, it is the rule
+    const parent = el.parentElement;
+    const peers = parent ? kidsOf(parent).filter((c) => c !== el && kinds([c, el])) : [];
+    const agreeing = peers.filter((c) => { const [l, rr] = padOf(c); return same(l, pl) && same(rr, pr); }).length;
+    if (agreeing >= 1) continue;
+
+    const diff = Math.abs(pl - pr);
+    // padding asymmetry is often deliberate, so it never outranks a gap or an edge issue
+    const sev = severityFor(diff);
+    add({ type: "padding", severity: sev === "high" ? "medium" : sev, el,
+      title: `Uneven side padding on ${label(el)}`,
+      detail: `left ${pl}px vs right ${pr}px${peers.length ? `, and its ${peers.length} sibling${peers.length === 1 ? " does" : "s do"} not use this` : ""}`,
+      expected: `equal left and right padding, or the same values its siblings use`,
+      guides: [band(r.left, r.top, pl, r.height, `${pl}px`, pl > pr), band(r.right - pr, r.top, pr, r.height, `${pr}px`, pr > pl)] });
+  }
+
+  // 4: section rhythm - top/bottom padding and content inset across page sections
     const sections = all.filter((el) => el.tagName === "SECTION" && get(el).r.width >= innerWidth * LIMITS.sectionWidthRatio && get(el).r.height >= LIMITS.minSectionH);
     if (sections.length >= 2) {
       const pads = sections.map((s) => { const { cs, r } = get(s); return { el: s, r, pt: px(cs.paddingTop), pb: px(cs.paddingBottom) }; });
@@ -352,11 +364,12 @@
     panel.innerHTML = `
       <header class="snk-head">
         <span class="snk-logo" aria-hidden="true"><i></i><i></i></span>
-        <h2 class="snk-title-h">Snake Eyes</h2>
+        <h2 class="snk-title-h">Snake Eyes <span class="snk-ver">v${VERSION}</span></h2>
         <span class="snk-count${issues.length ? "" : " snk-count-ok"}"></span>
         <span class="snk-spacer"></span>
         <button class="snk-btn snk-rescan" type="button" title="Measure this page again at the current size" hidden>Re-scan</button>
         <button class="snk-btn snk-all" type="button" title="Draw every guide at once">Show all</button>
+      <button class="snk-btn snk-xray" type="button" title="Reveal every box on the page, shaded by nesting depth" aria-pressed="false">X-ray</button>
         <button class="snk-btn snk-copy" type="button" title="Copy the report for an agent">Copy report</button>
         <button class="snk-icon snk-collapse" type="button" title="Collapse the panel" aria-label="Collapse"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
         <button class="snk-icon snk-x" type="button" title="Close (Esc)" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
@@ -391,18 +404,29 @@
       } else if (g.kind === "v") {
         mk(`snk-line snk-vline ${tone}`, { left: `${g.x}px`, top: `${g.y1}px`, height: `${Math.max(1, g.y2 - g.y1)}px` });
         mk(`snk-badge ${tone}`, { left: `${g.x}px`, top: `${(g.y1 + g.y2) / 2}px` }).textContent = g.text;
-      } else if (g.kind === "edge") {
+      } else if (g.kind === "band") {
+      mk(`snk-band ${tone}`, { left: `${g.x}px`, top: `${g.y}px`, width: `${Math.max(1, g.w)}px`, height: `${Math.max(1, g.h)}px` });
+      mk(`snk-badge ${tone}`, { left: `${g.x + g.w / 2}px`, top: `${g.y + g.h / 2}px` }).textContent = g.text;
+    } else if (g.kind === "edge") {
         const pad = LIMITS.edgeGuidePad;
         mk(`snk-line snk-vline snk-edge ${tone}`, { left: `${g.x}px`, top: `${g.y1 - pad}px`, height: `${g.y2 - g.y1 + pad * 2}px` });
         // expected badge above the box, actual badge below it, so 2 close edges never overlap
         mk(`snk-badge ${tone}`, { left: `${g.x}px`, top: `${g.bad ? g.y2 + pad : g.y1 - pad}px` }).textContent = g.text;
       }
     };
-    const boxNode = (r, active, frag) => {
+    const boxNode = (r, active, frag, caption) => {
       const d = document.createElement("div");
       d.className = `snk-box${active ? " snk-active" : ""}`;
       Object.assign(d.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
       frag.appendChild(d);
+      // name the box: on a page of nested wrappers, an outline alone does not say what it traces
+      if (active && caption) {
+        const tag = document.createElement("div");
+        tag.className = "snk-boxtag";
+        tag.textContent = caption;
+        Object.assign(tag.style, { left: `${r.left}px`, top: `${Math.max(0, r.top - 20)}px` });
+        frag.appendChild(tag);
+      }
     };
     // read nothing from the page here: rects were stored at analysis time, so this is writes only.
     // sizeLayer reads scrollWidth/scrollHeight, so it runs on mount and on resize, never per draw.
@@ -410,13 +434,14 @@
       clearGuides();
       const frag = document.createDocumentFragment();
       for (const i of items) {
-        boxNode(i.r, i === activeIssue, frag);
+        boxNode(i.r, i === activeIssue, frag, i.selector ? i.selector.split(" > ").pop() : "");
         const gs = items.length === 1 ? i.guides : i.guides.filter((g, idx) => g.bad || idx < LIMITS.guideCap);
         gs.forEach((g) => guideNodes(g, frag));
       }
       layer.appendChild(frag);
     };
     const activate = (i) => {
+      if (xray) { xray = false; const b = panel.querySelector(".snk-xray"); b.classList.remove("snk-on"); b.setAttribute("aria-pressed", "false"); }
       draw([i], i);
       list.querySelectorAll(".snk-item").forEach((b) => {
         const on = b.dataset.n === String(i.n);
@@ -439,8 +464,52 @@
     on(panel.querySelector(".snk-collapse"), "click", () => { panel.classList.toggle("snk-collapsed"); });
     on(panel.querySelector(".snk-rescan"), "click", () => { close(false); tellWorker("rescan"); });
 
-    // chrome is absent when the tests inject this directly, so every call is guarded.
-    const tellWorker = (type) => { try { if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type }); } catch { /* worker asleep or not an extension context */ } };
+    // X-ray: most confusion on a real page comes from wrappers you cannot see. This paints every
+    // box on the page, warm for deeply nested, cool for shallow, so the stack becomes visible.
+    let xray = false;
+    const drawXray = () => {
+      sizeLayer(); clearGuides();
+      const frag = document.createDocumentFragment();
+      let seen = 0;
+      const walk = (el, depth) => {
+        if (seen > LIMITS.xrayNodes) return;
+        for (const kid of el.children) {
+          if (kid.id === ROOT_ID) continue;
+          const cs = getComputedStyle(kid);
+          if (cs.display === "none" || cs.visibility === "hidden") continue;
+          const b = kid.getBoundingClientRect();
+          if (b.width > 2 && b.height > 2) {
+            seen++;
+            const d = document.createElement("div");
+            d.className = "snk-xbox";
+            // 250 (deep blue) down to 0 (red) as nesting grows: shallow is cool, deep is hot
+            const hue = Math.max(0, 250 - depth * 22);
+            Object.assign(d.style, {
+              left: `${b.left + scrollX}px`, top: `${b.top + scrollY}px`,
+              width: `${b.width}px`, height: `${b.height}px`,
+              borderColor: `hsl(${hue} 90% 55% / 0.85)`, background: `hsl(${hue} 90% 55% / 0.05)`,
+            });
+            frag.appendChild(d);
+          }
+          walk(kid, depth + 1);
+        }
+      };
+      walk(document.body, 0);
+      layer.appendChild(frag);
+      panel.querySelector(".snk-legend").textContent = `X-ray: ${seen} boxes on this page, cool outlines are shallow, warm ones are deeply nested.`;
+    };
+    on(panel.querySelector(".snk-xray"), "click", (ev) => {
+      xray = !xray;
+      const btn = ev.currentTarget;
+      btn.classList.toggle("snk-on", xray);
+      btn.setAttribute("aria-pressed", String(xray));
+      if (xray) { drawXray(); list.querySelectorAll(".snk-item").forEach((b) => b.classList.remove("snk-current")); }
+      else {
+        panel.querySelector(".snk-legend").textContent = "Click an issue to jump to it. Red = off, green = the value the siblings agree on.";
+        if (issues.length) activate(issues[0]); else clearGuides();
+      }
+    });
+
     const returnFocusTo = document.activeElement;
     const close = (notify = true) => {
       ac.abort();
@@ -481,10 +550,45 @@
     return { shadow, close };
   }
 
+  // ---------- stage 0: say we heard the click ----------
+  // The scan takes about 30ms, far too fast to see, so a click would otherwise look like nothing
+  // happened until the panel appeared. The snake holds the moment and names the extension.
+  function showSnake() {
+    const root = document.createElement("div");
+    root.id = ROOT_ID;
+    const shadow = root.attachShadow({ mode: "closed" });
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(window.__SNAKE_EYES_CSS__ || "");
+    shadow.adoptedStyleSheets = [sheet];
+    const box = document.createElement("div");
+    box.className = "snk-splash";
+    box.setAttribute("role", "status");
+    box.innerHTML = `<div class="snk-snake">${Array.from({ length: 9 }, (_, i) =>
+      `<span class="snk-seg${i === 0 ? " snk-head" : ""}" style="animation-delay:-${(i * 0.055).toFixed(3)}s"></span>`).join("")}</div>
+      <span class="snk-splash-text">Measuring the page</span>`;
+    shadow.appendChild(box);
+    document.documentElement.appendChild(root);
+    return { root, shadow };
+  }
+
   // ---------- the run ----------
+  const splash = showSnake();
+  // a second click, or Escape, must cancel a scan in flight, so the handle exists from frame 1
+  const splashAc = new AbortController();
+  const cancel = () => { splashAc.abort(); splash.root.remove(); delete window.__snakeEyes; tellWorker("closed"); };
+  window.__snakeEyes = { ready: false, close: cancel };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && (e.isTrusted || window.__snakeEyesTest)) cancel(); }, { signal: splashAc.signal });
+
+  const wait = window.__snakeEyesTest ? LIMITS.splashMs / 10 : LIMITS.splashMs;
+  const startedAt = performance.now();
+  requestAnimationFrame(() => {
   const scan = scanPage();
   const { issues, total, dropped } = analyze(scan);
   const report = buildReport(issues, { total, dropped, scanTruncated: scan.scanTruncated });
+  setTimeout(() => {
+  if (!window.__snakeEyes || window.__snakeEyes.ready) return; // cancelled mid-scan
+  splashAc.abort();
+  splash.root.remove();
   const ui = mount(issues, report, { total, dropped });
 
   window.__snakeEyes = {
@@ -496,5 +600,7 @@
     // the stages, so a test can drive one without the other 3
     stages: { scanPage, analyze, buildReport, mount },
   };
+  }, Math.max(0, wait - (performance.now() - startedAt)));
+  });
   return false;
 })();

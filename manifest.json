@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Snake Eyes",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Spot inconsistent spacing on any page: uneven gaps, misaligned edges, asymmetric padding, section rhythm. Red guides with the numbers, a clickable list, and a report you can paste to an agent.",
   "action": {
     "default_title": "Snake Eyes: audit spacing on this page",

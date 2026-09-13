@@ -11,9 +11,9 @@
   /* 1. right edge: left edges all agree, 1 item stops 6px short on the right */
   .rstack > p { display: block; margin: 0 0 12px; background: #eef2ff; padding: 8px; width: 300px; }
   .rstack > p:nth-child(2) { width: 294px; }
-  /* 2. vertical padding: equal sides, 8px difference top to bottom, tall enough to be compared */
-  /* the padding check only looks at containers that hold elements, so this one holds a span */
-  .panel { background: #fff6e0; padding: 16px 20px 24px 20px; height: 120px; }
+  /* 2. side padding: 24px more on the left than the right, and no sibling shares it */
+  /* the padding check only looks at containers that hold elements, so this one holds spans */
+  .panel { background: #fff6e0; padding: 20px 20px 20px 44px; height: 120px; }
   .panel > span { display: block; }
   /* 3. section rhythm on the BOTTOM edge: this one uses 24px instead of 56px */
   #closing { padding-bottom: 24px; background: #f6f8fa; }
@@ -23,7 +23,7 @@
   <section id="right"><div class="wrap"><h2>Right edges</h2>
     <div class="rstack"><p>Line 1</p><p>Line 2 is 6px short</p><p>Line 3</p></div>
   </div></section>
-  <section id="panel"><div class="wrap"><div class="panel"><span>Top padding 16px, bottom padding 24px, sides equal.</span><span>A second block so the container has children.</span></div></div></section>
+  <section id="panel"><div class="wrap"><div class="panel"><span>Left padding 44px, right padding 20px.</span><span>A second block so the container has children.</span></div></div></section>
   <section id="middle"><div class="wrap"><h2>Middle</h2><p>A normal section so the rhythm has something to agree on.</p></div></section>
   <section id="closing"><div class="wrap"><h2>Closing</h2><p>This section ends 24px early while the others use 56px.</p></div></section>
 </body>

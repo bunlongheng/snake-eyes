@@ -33,6 +33,14 @@
 .snk-box { position: absolute; border: 1px dashed #c0392b; border-radius: 3px; }
 .snk-box.snk-active { border: 2px solid #c0392b; box-shadow: 0 0 0 4px rgba(192, 57, 43, 0.15); }
 .snk-line { position: absolute; }
+/* a filled band over a real region of space, so padding is seen rather than inferred */
+.snk-band { position: absolute; border: 1px dashed; }
+.snk-band.snk-bad { border-color: #c0392b; background: rgba(192, 57, 43, 0.16); }
+.snk-band.snk-ok { border-color: #15803d; background: rgba(21, 128, 61, 0.14); }
+/* names the outlined element, because on a page of wrappers an outline alone says nothing */
+.snk-boxtag { position: absolute; transform: translateY(-2px); font-family: ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 700; line-height: 1; padding: 3px 5px; border-radius: 4px; background: #c0392b; color: #fff; white-space: nowrap; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; }
+/* X-ray: every box on the page, shaded by how deeply it is nested */
+.snk-xbox { position: absolute; border: 1px solid; border-radius: 1px; }
 .snk-hline { height: 0; border-top: 2px dashed; transform: translateY(-1px); }
 .snk-vline { width: 0; border-left: 2px dashed; transform: translateX(-1px); }
 .snk-edge { border-left-style: solid; }
@@ -41,6 +49,28 @@
 .snk-badge { position: absolute; transform: translate(-50%, -50%); font-family: ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 6px; color: #fff; white-space: nowrap; letter-spacing: 0.02em; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }
 .snk-badge.snk-bad { background: #c0392b; z-index: 2; }
 .snk-badge.snk-ok { background: #15803d; z-index: 1; }
+
+/* the snake: 9 segments riding the same wavy path, staggered so the body trails the head.
+   Shown while the page is being measured. */
+.snk-splash { position: fixed; top: 12px; right: 12px; width: 460px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 16px 18px; background: var(--snk-bg); color: var(--snk-fg); border: 1px solid var(--snk-line); border-radius: 14px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25); font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; z-index: 2; }
+@media (max-width: 600px) {
+  .snk-splash { top: auto; right: 8px; left: 8px; bottom: 8px; width: auto; max-width: none; }
+}
+.snk-snake { position: relative; width: 240px; height: 30px; }
+.snk-seg { position: absolute; left: 0; top: 0; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; background: #7bb800;
+  offset-path: path("M2,15 C22,1 42,29 62,15 S102,1 122,15 S162,29 182,15 S222,1 238,15"); offset-rotate: auto;
+  animation: snk-slither 1.5s linear infinite; }
+.snk-seg.snk-head { width: 16px; height: 16px; margin: -8px 0 0 -8px; background: #0b1220; }
+/* snake eyes: the 2 dots the extension is named after */
+.snk-seg.snk-head::before, .snk-seg.snk-head::after { content: ""; position: absolute; top: 4px; width: 3px; height: 3px; border-radius: 50%; background: #d1fa4a; }
+.snk-seg.snk-head::before { left: 3px; }
+.snk-seg.snk-head::after { right: 3px; }
+.snk-splash-text { font-size: 13px; font-weight: 600; color: var(--snk-fg2); }
+@keyframes snk-slither { to { offset-distance: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .snk-seg { animation-duration: 0s; }
+  .snk-seg:nth-child(n) { offset-distance: 50%; }
+}
 
 /* the panel */
 .snk-panel:focus-visible { outline: 2px solid var(--snk-focus); outline-offset: -2px; }
@@ -62,6 +92,7 @@
 /* The name never truncates: it is the thing that says what this panel is. The count pill is the
    flexible item instead, and the panel is wide enough to hold the whole header at its default size. */
 .snk-title-h { margin: 0; font-size: 13px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+.snk-ver { font-weight: 600; font-size: 11px; color: var(--snk-fg2); }
 .snk-logo { display: inline-flex; gap: 3px; width: 26px; height: 26px; border-radius: 8px; background: #0b1220; align-items: center; justify-content: center; flex-shrink: 0; }
 .snk-logo i { display: block; width: 7px; height: 10px; border-radius: 50%; background: #d1fa4a; position: relative; }
 .snk-logo i::after { content: ""; position: absolute; left: 3px; top: 1px; width: 1.5px; height: 8px; background: #0b1220; border-radius: 1px; }
@@ -93,4 +124,5 @@
 .snk-empty { padding: 20px 12px; color: var(--snk-fg2); }
 .snk-foot { padding: 8px 12px; border-top: 1px solid var(--snk-line); color: var(--snk-fg2); font-size: 11px; background: var(--snk-bg2); }
 .snk-stale { color: var(--snk-warn); font-weight: 600; }
+.snk-xray.snk-on { background: var(--snk-primary-bg); color: var(--snk-primary-fg); border-color: var(--snk-primary-bg); }
 .snk-rescan { background: var(--snk-warn); color: var(--snk-warn-fg); border-color: var(--snk-warn); }

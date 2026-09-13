@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0 - 2026-09-13
+
+- Padding check rewritten. It used to report any box whose padding was not symmetric, which on a
+  real marketing page produced 41 findings out of 43, every one of them deliberate. Vertical
+  padding is no longer compared at all, since section rhythm already covers vertical spacing, and
+  uneven side padding is reported only when the element's own same-kind siblings disagree with it.
+  That page now reports 4 issues instead of 42.
+- X-ray button: paints every box on the page, cool outlines for shallow, warm for deeply nested,
+  so the invisible wrappers behind a confusing finding become visible.
+- A snake animates across the panel while the page is measured.
+- Padding findings now shade the padding strip itself instead of drawing a line across it, and the
+  highlighted element is labelled with its selector so it is clear which box is meant.
+- The panel shows the version it is running, which matters when reloading an unpacked build.
+
 ## 1.1.0 - 2026-09-13
 
 - Single-pass scan: rect and computed style read once per element, 8000-node budget, hidden subtrees skipped
