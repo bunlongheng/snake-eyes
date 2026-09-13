@@ -353,6 +353,11 @@
     shadow.adoptedStyleSheets = [sheet];
     delete window.__SNAKE_EYES_CSS__;
 
+    if (document.documentElement.classList.contains("snk-docked")) {
+      const rail = document.createElement("div");
+      rail.className = "snk-rail";
+      shadow.appendChild(rail);
+    }
     const layer = document.createElement("div");
     layer.className = "snk-layer";
     layer.setAttribute("aria-hidden", "true"); // pure decoration, never announced
@@ -368,17 +373,19 @@
     panel.tabIndex = -1; // the panel takes focus on open so Tab walks the issues and Escape closes
     panel.innerHTML = `
       <header class="snk-head">
-        <span class="snk-logo" aria-hidden="true"><i></i><i></i></span>
-        <h2 class="snk-title-h">Snake Eyes <span class="snk-ver">v${VERSION}</span></h2>
-        <span class="snk-count${issues.length ? "" : " snk-count-ok"}"></span>
-        <span class="snk-spacer"></span>
+      <span class="snk-logo" aria-hidden="true"></span>
+      <h2 class="snk-title-h">Snake Eyes <span class="snk-ver">v${VERSION}</span></h2>
+      <span class="snk-spacer"></span>
+      <span class="snk-ctrls">
+        <button class="snk-icon snk-rescan" type="button" title="Measure again as the page looks right now: open a modal, a menu or a card first" aria-label="Re-scan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg></button>
+        <button class="snk-icon snk-collapse" type="button" title="Collapse the panel" aria-label="Collapse"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button class="snk-icon snk-x" type="button" title="Close (Esc)" aria-label="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+      </span>
       <div class="snk-tools">
-        <button class="snk-btn snk-all" type="button" title="Draw every guide at once">Show all</button>
+        <span class="snk-count${issues.length ? "" : " snk-count-ok"}"></span>
+        <button class="snk-btn snk-all" type="button" title="Draw every guide on the page at once">All</button>
         <button class="snk-btn snk-ruler" type="button" title="Measure the layout: every region, section, container and panel with its size and side gaps" aria-pressed="false">Ruler</button>
         <button class="snk-btn snk-copy" type="button" title="Copy the report for an agent">Copy</button>
-        <button class="snk-icon snk-rescan" type="button" title="Measure again as the page looks right now: open a modal, a menu or a card first" aria-label="Re-scan"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8a6 6 0 1 1-1.8-4.3M14 2v3.5h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <button class="snk-icon snk-collapse" type="button" title="Collapse the panel" aria-label="Collapse"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-        <button class="snk-icon snk-x" type="button" title="Close (Esc)" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       </div>
     </header>
       <div class="snk-opts" hidden>
@@ -614,6 +621,11 @@
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(window.__SNAKE_EYES_CSS__ || "");
     shadow.adoptedStyleSheets = [sheet];
+    if (canDock) {
+      const rail = document.createElement("div");
+      rail.className = "snk-rail";
+      shadow.appendChild(rail);
+    }
     const box = document.createElement("div");
     box.className = "snk-splash";
     box.setAttribute("role", "status");

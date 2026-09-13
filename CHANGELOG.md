@@ -2,6 +2,17 @@
 
 ## 1.2.0 - 2026-09-13
 
+- New artwork everywhere: the toolbar icon at all 4 sizes and the panel logo now render from
+  1 source file, assets/logo-source.png, via npm run icons.
+- The docked panel sits on its own dark rail, so it is obvious which pixels belong to the extension
+  and which belong to the site underneath.
+- Header rebuilt: identity and window controls on the top row, count and actions on the second,
+  every row starting on the same left edge. A duplicated count pill and an unclosed span had been
+  nesting the toolbar inside the window controls.
+- Fixed a bug where the Ruler layer toggles never hid. The UA [hidden] rule is display:none with no
+  specificity, so the author rule making that row a flexbox beat it and the panel showed layer
+  options with Ruler switched off.
+
 - Docked panel. On a window 1200px or wider the page gives up a 20% strip instead of hiding
   underneath the panel, the way devtools docks to a side, and takes its width back on close. The
   scan runs after the dock lands, so every number describes the layout you can actually see, and

@@ -224,13 +224,24 @@ const rulerOn = await inShadow(rule, () => {
 });
 check(rulerOn.boxes > 0 && rulerOn.sizes === rulerOn.boxes, `Ruler outlines ${rulerOn.boxes} boxes and labels every one with its size`);
 check(rulerOn.opts && rulerOn.pressed === "true", "Ruler opens its layer toggles and reports itself pressed");
+// A UA [hidden] rule loses to any author rule that sets display, so a flex row with hidden set
+// stays on screen. This asserts the attribute actually hides, for every element that uses it.
+const hiddenWorks = async (pg, when) => {
+  const shown = await inShadow(pg, () => [...window.__snakeEyes.shadow.querySelectorAll("[hidden]")].filter((e) => getComputedStyle(e).display !== "none").map((e) => e.className || e.tagName));
+  check(shown.length === 0, `${when}: the hidden attribute really hides${shown.length ? " (still shown: " + shown.join(", ") + ")" : ""}`);
+};
+await hiddenWorks(rule, "with Ruler on");
+// both header rows start on the same left edge, or the panel reads as 2 unrelated toolbars
+const edges = await inShadow(rule, () => { const sh = window.__snakeEyes.shadow; const l = (s) => Math.round(sh.querySelector(s).getBoundingClientRect().left); return { logo: l(".snk-logo"), tools: l(".snk-tools"), firstTool: l(".snk-tools > *"), opts: l(".snk-opts label") }; });
+check(edges.logo === edges.tools && edges.tools === edges.firstTool && edges.opts === edges.logo, `every row starts on the same left edge (logo ${edges.logo}, tools ${edges.firstTool}, options ${edges.opts})`);
 check(/[0-9]+ x [0-9]+/.test(await inShadow(rule, () => window.__snakeEyes.shadow.querySelector(".snk-rtag").textContent)), "size labels read as width x height in px");
 await inShadow(rule, () => { window.__snakeEyes.shadow.querySelector(".snk-opts input[data-k='sizes']").click(); });
 await rule.waitForTimeout(200);
 check(await inShadow(rule, () => window.__snakeEyes.shadow.querySelectorAll(".snk-rtag").length === 0), "unticking Sizes drops the size labels");
 await inShadow(rule, () => { window.__snakeEyes.shadow.querySelector(".snk-ruler").click(); });
 await rule.waitForTimeout(200);
-check(await inShadow(rule, () => { const sh = window.__snakeEyes.shadow; return sh.querySelectorAll(".snk-rbox").length === 0 && sh.querySelector(".snk-opts").hidden; }), "turning Ruler off clears it and hides the toggles");
+check(await inShadow(rule, () => { const sh = window.__snakeEyes.shadow; return sh.querySelectorAll(".snk-rbox").length === 0 && sh.querySelector(".snk-opts").getBoundingClientRect().height === 0; }), "turning Ruler off clears it and the toggles take up no space");
+await hiddenWorks(rule, "with Ruler off");
 await rule.close();
 
 // ---------- Re-scan closes the overlay and asks the worker for a fresh pass ----------
