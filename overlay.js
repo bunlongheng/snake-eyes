@@ -193,10 +193,15 @@
         }
       }
 
-      // 2: left and right edge alignment of stacked siblings
+      // 2: left and right edge alignment of stacked siblings.
+      // Block boxes only. Inline and inline-block elements start wherever the words reach them, so
+      // 3 code chips inside a paragraph land on 3 lines, look like a stack of 3 siblings, and get
+      // reported for not sharing a left edge they were never meant to share. Telling someone to
+      // push a chip out of the middle of its own sentence is worse than the imaginary defect.
+      const startsItsOwnLine = (x) => { const d = get(x.el).cs.display; return !d.startsWith("inline") && d !== "contents"; };
       if (rows.length >= LIMITS.minEdgeRows && rows.every((r) => r.items.length === 1) && sameKids) {
         const items = rows.map((r) => r.items[0]);
-        if (!centered(el, items)) {
+        if (!centered(el, items) && items.every(startsItsOwnLine) && !isInlineRun(el, items)) {
           let top = Infinity, bottom = -Infinity;
           for (const x of items) { if (x.r.top < top) top = x.r.top; if (x.r.bottom > bottom) bottom = x.r.bottom; }
           for (const side of ["left", "right"]) {
@@ -367,7 +372,7 @@
         <h2 class="snk-title-h">Snake Eyes <span class="snk-ver">v${VERSION}</span></h2>
         <span class="snk-count${issues.length ? "" : " snk-count-ok"}"></span>
         <span class="snk-spacer"></span>
-        <button class="snk-btn snk-rescan" type="button" title="Measure this page again at the current size" hidden>Re-scan</button>
+        <button class="snk-btn snk-rescan" type="button" title="Measure the page again as it looks right now: open a modal, a menu or a card first">Re-scan</button>
         <button class="snk-btn snk-all" type="button" title="Draw every guide at once">Show all</button>
       <button class="snk-btn snk-xray" type="button" title="Reveal every box on the page, shaded by nesting depth" aria-pressed="false">X-ray</button>
         <button class="snk-btn snk-copy" type="button" title="Copy the report for an agent">Copy report</button>
@@ -533,9 +538,10 @@
       resizeTimer = setTimeout(() => {
         panel.querySelector(".snk-stale").hidden = false;
         panel.querySelector(".snk-legend").hidden = true;
-        // Re-scan replaces Show all rather than joining it: every guide it would draw is stale,
-        // and a 5th control wraps the header onto a second row.
-        panel.querySelector(".snk-rescan").hidden = false;
+        // Re-scan is always available, since the state worth measuring is often behind a click.
+        // Going stale only highlights it, and takes Show all away: every guide it would draw is
+        // stale, and a 5th control would wrap the header onto a second row.
+        panel.querySelector(".snk-rescan").classList.add("snk-urgent");
         panel.querySelector(".snk-all").hidden = true;
         panel.querySelector(".snk-count").hidden = true; // that tally described the old layout too
         // every measurement on screen belongs to the old viewport, so nothing here may be replayed.

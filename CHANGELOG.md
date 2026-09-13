@@ -2,6 +2,12 @@
 
 ## 1.2.0 - 2026-09-13
 
+- Edge check compares block boxes only. Inline and inline-block elements start wherever the words
+  reach them, so code chips inside a paragraph landed on separate lines, looked like a stack of
+  siblings, and were reported for not sharing a left edge they were never meant to share.
+- Re-scan is always available, not just after a resize: the layout worth checking is often behind a
+  click, so open the modal or the menu and press it.
+
 - Padding check rewritten. It used to report any box whose padding was not symmetric, which on a
   real marketing page produced 41 findings out of 43, every one of them deliberate. Vertical
   padding is no longer compared at all, since section rhythm already covers vertical spacing, and

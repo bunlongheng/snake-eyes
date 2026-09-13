@@ -125,4 +125,4 @@
 .snk-foot { padding: 8px 12px; border-top: 1px solid var(--snk-line); color: var(--snk-fg2); font-size: 11px; background: var(--snk-bg2); }
 .snk-stale { color: var(--snk-warn); font-weight: 600; }
 .snk-xray.snk-on { background: var(--snk-primary-bg); color: var(--snk-primary-fg); border-color: var(--snk-primary-bg); }
-.snk-rescan { background: var(--snk-warn); color: var(--snk-warn-fg); border-color: var(--snk-warn); }
+.snk-rescan.snk-urgent { background: var(--snk-warn); color: var(--snk-warn-fg); border-color: var(--snk-warn); }

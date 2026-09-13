@@ -182,7 +182,7 @@ const headBefore = await inShadow(stale, () => window.__snakeEyes.shadow.querySe
 await stale.setViewportSize({ width: 1000, height: 700 });
 const staleOk = await stale.waitForFunction(() => { const sh = window.__snakeEyes.shadow; return !sh.querySelector(".snk-stale").hidden && sh.querySelector(".snk-all").hidden && [...sh.querySelectorAll(".snk-item")].every((b) => b.disabled); }, undefined, { timeout: 4000 }).then(() => true, () => false);
 check(staleOk, "resizing marks the panel stale and withdraws the measurements it can no longer draw");
-check(await inShadow(stale, () => !window.__snakeEyes.shadow.querySelector(".snk-rescan").hidden), "a stale panel offers Re-scan instead of leaving the user to guess");
+check(await inShadow(stale, () => window.__snakeEyes.shadow.querySelector(".snk-rescan").classList.contains("snk-urgent")), "a stale panel highlights Re-scan");
 const headAfter = await inShadow(stale, () => window.__snakeEyes.shadow.querySelector(".snk-head").getBoundingClientRect().height);
 check(headAfter <= headBefore + 1, `showing Re-scan does not grow the header (${headBefore}px to ${headAfter}px)`);
 check(await inShadow(stale, () => { const sh = window.__snakeEyes.shadow; return sh.querySelector(".snk-rescan").getBoundingClientRect().width > 0 && /Re-scan/.test(sh.querySelector(".snk-stale").textContent); }), "the stale notice names the Re-scan button that fixes it");

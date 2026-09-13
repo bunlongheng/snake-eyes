@@ -28,6 +28,12 @@ Nothing runs until you click. The extension asks only for `activeTab` and `scrip
 
 Everything is measured from the rendered layout at the current viewport, tolerance 2px. Resize and the panel greys out, because every number on screen belongs to the old layout, and a Re-scan button appears to measure the new size.
 
+### Measuring a state behind a click
+
+The scan measures the page as it stands. Hand-tuned layout tends to drift in the states you have to
+open: a modal, a menu, an expanded card. Open the state yourself, then press **Re-scan** in the
+panel. It measures what is on screen now, including whatever the click just revealed.
+
 ### What it deliberately does not flag
 
 A spacing auditor is only useful if you trust its silence, so these are skipped rather than guessed at:
@@ -35,6 +41,7 @@ A spacing auditor is only useful if you trust its silence, so these are skipped 
 - **Siblings that are not the same kind.** Comparing a heading against a card tells you nothing, so a row or stack is only measured when its children share a tag or a first class name.
 - **Runs of text.** A paragraph with links in it has uneven gaps by nature. Inline children and mixed text nodes are left alone.
 - **Centered groups.** Items centered on their parent are meant to have different edges.
+- **Inline and inline-block elements.** A code chip inside a sentence starts wherever the words reach it. 3 chips on 3 lines look like a stack of siblings but were never meant to share an edge, so only block-level boxes are compared.
 - **Anything inside a shadow root or an iframe.** The scan walks the main document only.
 - **Sections that are not `<section>` elements.** The vertical rhythm check looks for real section tags, so a page built from divs gets the other 3 checks but not that one.
 

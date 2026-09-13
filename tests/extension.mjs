@@ -130,7 +130,7 @@ try {
   await worker.evaluate(async (id) => {
     await chrome.scripting.executeScript({
       target: { tabId: id },
-      func: () => { const sh = window.__snakeEyes.shadow; sh.querySelector(".snk-rescan").hidden = false; sh.querySelector(".snk-rescan").click(); },
+      func: () => { window.__snakeEyes.shadow.querySelector(".snk-rescan").click(); },
     });
   }, tabId);
   await settled("on");
