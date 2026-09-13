@@ -56,6 +56,14 @@ const ui = await inShadow(page, () => { const sh = window.__snakeEyes.shadow; re
 check(ui.items === 6 && ui.buttons === 6, "panel lists every issue as a real button");
 check(ui.guides > 0 && ui.badges > 0 && ui.box, "first issue is highlighted with guides and numbers");
 check(ui.h2 && !!ui.aria, "panel has a heading and an accessible name");
+// A data URI contains a semicolon, so a value written with a sloppy regex truncates and the
+// leftover text runs on and eats the next declaration. Assert the art actually resolves.
+const art = await inShadow(page, () => {
+  const sh = window.__snakeEyes.shadow;
+  const bg = getComputedStyle(sh.querySelector(".snk-logo")).backgroundImage;
+  return { logo: bg.startsWith('url("data:image/png'), len: bg.length };
+});
+check(art.logo && art.len > 500, `the panel logo resolves to real image data (${art.len} chars)`);
 check(await inShadow(page, () => window.__snakeEyes.shadow.activeElement === window.__snakeEyes.shadow.querySelector(".snk-panel")), "the panel takes focus on open, so Tab and Escape work without a click");
 check(await inShadow(page, () => { const sh = window.__snakeEyes.shadow; const cb = getComputedStyle(sh.querySelector(".snk-btn")), ct = getComputedStyle(sh.querySelector(".snk-tag")); return cb.fontSize === "12px" && cb.fontWeight === "600" && ct.fontSize === "10px"; }), "button and tag typography apply (no invalid font shorthand)");
 

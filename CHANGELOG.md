@@ -2,6 +2,13 @@
 
 ## 1.2.0 - 2026-09-13
 
+- Scanning animation is the snake itself now, breathing over a soft green pulse, instead of 9 dots
+  chasing a sine wave.
+- Fixed a stylesheet corruption in the icon generator. It wrote the logo data URI with a regex
+  bounded by the next semicolon, but a data URI contains one (image/png;base64), so the value was
+  truncated and the leftover text ran on and swallowed the declaration after it. That is what made
+  the splash art vanish and the primary button lose its colour. A test now asserts the logo
+  resolves to real image data.
 - New artwork everywhere: the toolbar icon at all 4 sizes and the panel logo now render from
   1 source file, assets/logo-source.png, via npm run icons.
 - The docked panel sits on its own dark rail, so it is obvious which pixels belong to the extension

@@ -629,8 +629,7 @@
     const box = document.createElement("div");
     box.className = "snk-splash";
     box.setAttribute("role", "status");
-    box.innerHTML = `<div class="snk-snake">${Array.from({ length: 9 }, (_, i) =>
-      `<span class="snk-seg${i === 0 ? " snk-head" : ""}" style="animation-delay:-${(i * 0.055).toFixed(3)}s"></span>`).join("")}</div>
+    box.innerHTML = `<div class="snk-snake"><div class="snk-art"></div></div>
       <span class="snk-splash-text">Measuring the page</span>`;
     shadow.appendChild(box);
     document.documentElement.appendChild(root);
