@@ -56,7 +56,8 @@ a breakpoint and change the layout you were trying to audit.
 
 - Issues sorted high to low. High is 8px or more off, medium 5 to 7, low 3 to 4. Anything inside the 2px tolerance is not reported at all. The list caps at 150, most severe first, and says so.
 - Click an issue (or Tab to it and press Enter): the page scrolls to it, the element gets a red outline and its guides appear.
-- **Show all** draws every guide at once. **Copy report** puts the markdown below on the clipboard. `Esc` closes and hands focus back where it was.
+- **Ruler** measures the layout instead of judging it: every region, section, layout container and panel outlined in its own colour, each labelled with its size in px, and purple bands showing the gap to each side of the page. Tick the layers you want. Nothing here is a finding.
+- **Show all** draws every guide at once. **Copy** puts the markdown below on the clipboard. The refresh icon measures the page again as it looks right now. `Esc` closes and hands focus back where it was.
 - On a phone-sized window the panel becomes a bottom sheet. It follows your light or dark theme.
 - Resize the window and the guides clear, because they described the old layout. A **Re-scan** button takes their place.
 

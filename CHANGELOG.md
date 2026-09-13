@@ -23,10 +23,8 @@
   padding is no longer compared at all, since section rhythm already covers vertical spacing, and
   uneven side padding is reported only when the element's own same-kind siblings disagree with it.
   That page now reports 4 issues instead of 42.
-- X-ray button: outlines every box on the page so the invisible wrappers behind a confusing
-  finding become visible. Cyan sits shallow and violet sits deep. It deliberately avoids red and
-  green, which already mean wrong and right on every guide, and it draws no fill, because the first
-  version read as a verdict when X-ray makes no judgement at all.
+- Ruler: outlines every region, section, layout container and panel in its own colour, labels each with its size in px, and draws the gap to each side of the page as a purple band. Layer toggles let you show only what you are looking at. It replaces the earlier X-ray depth view, which said less.
+- Re-scan moved to a refresh icon beside collapse and close, so the toolbar reads as 3 actions and 3 controls.
 - A snake animates across the panel while the page is measured.
 - Padding findings now shade the padding strip itself instead of drawing a line across it, and the
   highlighted element is labelled with its selector so it is clear which box is meant.

@@ -212,6 +212,27 @@ check(replay.seen > 0 && replay.mapEmptied === 0, `scanPage read ${replay.seen} 
 check(/^# Snake Eyes spacing report/.test(replay.text), "buildReport works on issues it was handed rather than on a closure");
 await stageCheck.close();
 
+// ---------- Ruler measures the layout without judging it ----------
+const rule = await context.newPage();
+await rule.goto("file://" + join(here, "fixture.html"));
+await inject(rule);
+await inShadow(rule, () => { window.__snakeEyes.shadow.querySelector(".snk-ruler").click(); });
+await rule.waitForTimeout(300);
+const rulerOn = await inShadow(rule, () => {
+  const sh = window.__snakeEyes.shadow;
+  return { boxes: sh.querySelectorAll(".snk-rbox").length, sizes: sh.querySelectorAll(".snk-rtag").length, opts: !sh.querySelector(".snk-opts").hidden, pressed: sh.querySelector(".snk-ruler").getAttribute("aria-pressed") };
+});
+check(rulerOn.boxes > 0 && rulerOn.sizes === rulerOn.boxes, `Ruler outlines ${rulerOn.boxes} boxes and labels every one with its size`);
+check(rulerOn.opts && rulerOn.pressed === "true", "Ruler opens its layer toggles and reports itself pressed");
+check(/[0-9]+ x [0-9]+/.test(await inShadow(rule, () => window.__snakeEyes.shadow.querySelector(".snk-rtag").textContent)), "size labels read as width x height in px");
+await inShadow(rule, () => { window.__snakeEyes.shadow.querySelector(".snk-opts input[data-k='sizes']").click(); });
+await rule.waitForTimeout(200);
+check(await inShadow(rule, () => window.__snakeEyes.shadow.querySelectorAll(".snk-rtag").length === 0), "unticking Sizes drops the size labels");
+await inShadow(rule, () => { window.__snakeEyes.shadow.querySelector(".snk-ruler").click(); });
+await rule.waitForTimeout(200);
+check(await inShadow(rule, () => { const sh = window.__snakeEyes.shadow; return sh.querySelectorAll(".snk-rbox").length === 0 && sh.querySelector(".snk-opts").hidden; }), "turning Ruler off clears it and hides the toggles");
+await rule.close();
+
 // ---------- Re-scan closes the overlay and asks the worker for a fresh pass ----------
 // The worker side of this channel is covered in tests/extension.mjs, where Escape proves a
 // message really reaches background.js. Here we prove the button sends the right one.

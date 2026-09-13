@@ -373,15 +373,25 @@
         <span class="snk-count${issues.length ? "" : " snk-count-ok"}"></span>
         <span class="snk-spacer"></span>
       <div class="snk-tools">
-        <button class="snk-btn snk-rescan" type="button" title="Measure the page again as it looks right now: open a modal, a menu or a card first">Re-scan</button>
         <button class="snk-btn snk-all" type="button" title="Draw every guide at once">Show all</button>
-        <button class="snk-btn snk-xray" type="button" title="Reveal every box on the page, shaded by nesting depth" aria-pressed="false">X-ray</button>
+        <button class="snk-btn snk-ruler" type="button" title="Measure the layout: every region, section, container and panel with its size and side gaps" aria-pressed="false">Ruler</button>
         <button class="snk-btn snk-copy" type="button" title="Copy the report for an agent">Copy</button>
+        <button class="snk-icon snk-rescan" type="button" title="Measure again as the page looks right now: open a modal, a menu or a card first" aria-label="Re-scan"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8a6 6 0 1 1-1.8-4.3M14 2v3.5h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="snk-icon snk-collapse" type="button" title="Collapse the panel" aria-label="Collapse"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
         <button class="snk-icon snk-x" type="button" title="Close (Esc)" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       </div>
     </header>
-      <ol class="snk-list"></ol>
+      <div class="snk-opts" hidden>
+      <span class="snk-opts-title">Layers</span>
+      <label><input type="checkbox" data-k="region" checked><i style="background:#e11d48"></i>Region</label>
+      <label><input type="checkbox" data-k="section" checked><i style="background:#2563eb"></i>Section</label>
+      <label><input type="checkbox" data-k="container" checked><i style="background:#16a34a"></i>Container</label>
+      <label><input type="checkbox" data-k="panel" checked><i style="background:#ea580c"></i>Panel</label>
+      <span class="snk-opts-title">Detail</span>
+      <label><input type="checkbox" data-k="sizes" checked>Sizes</label>
+      <label><input type="checkbox" data-k="gaps" checked><i style="background:#7c3aed"></i>Side gaps</label>
+    </div>
+    <ol class="snk-list"></ol>
       <footer class="snk-foot"><span class="snk-legend">Click an issue to jump to it. Red = off, green = the value the siblings agree on.</span><span class="snk-stale" hidden>Viewport changed. Re-scan to measure this size.</span></footer>`;
     panel.querySelector(".snk-count").textContent = countText;
     shadow.appendChild(panel);
@@ -448,7 +458,7 @@
       layer.appendChild(frag);
     };
     const activate = (i) => {
-      if (xray) { xray = false; const b = panel.querySelector(".snk-xray"); b.classList.remove("snk-on"); b.setAttribute("aria-pressed", "false"); }
+      if (ruler) { ruler = false; const b = panel.querySelector(".snk-ruler"); b.classList.remove("snk-on"); b.setAttribute("aria-pressed", "false"); panel.querySelector(".snk-opts").hidden = true; }
       draw([i], i);
       list.querySelectorAll(".snk-item").forEach((b) => {
         const on = b.dataset.n === String(i.n);
@@ -471,48 +481,81 @@
     on(panel.querySelector(".snk-collapse"), "click", () => { panel.classList.toggle("snk-collapsed"); });
     on(panel.querySelector(".snk-rescan"), "click", () => { close(false); tellWorker("rescan"); });
 
-    // X-ray: most confusion on a real page comes from wrappers you cannot see. This paints every
-    // box on the page, warm for deeply nested, cool for shallow, so the stack becomes visible.
-    let xray = false;
-    const drawXray = () => {
+    // Ruler: the layout with its numbers on. Boxes are coloured by the job they do rather than by
+    // depth, each carries its own size, and layout containers show the gap to each side of the
+    // page. Structure and dimensions, never a verdict.
+    const ROLE = { region: "#e11d48", section: "#2563eb", container: "#16a34a", panel: "#ea580c" };
+    const SHOW = { region: true, section: true, container: true, panel: true, sizes: true, gaps: true };
+    let ruler = false;
+    const drawRuler = () => {
       sizeLayer(); clearGuides();
       const frag = document.createDocumentFragment();
-      let seen = 0;
-      const walk = (el, depth) => {
-        if (seen > LIMITS.xrayNodes) return;
-        for (const kid of el.children) {
-          if (kid.id === ROOT_ID) continue;
-          const cs = getComputedStyle(kid);
-          if (cs.display === "none" || cs.visibility === "hidden") continue;
-          const b = kid.getBoundingClientRect();
-          if (b.width > 2 && b.height > 2) {
-            seen++;
-            const d = document.createElement("div");
-            d.className = "snk-xbox";
-            // Cyan to violet as nesting grows. Deliberately avoids red and green: those already
-            // mean wrong and right on every guide, and reusing them here read as a verdict when
-            // X-ray makes no judgement at all. No fill either, so the page keeps its own colours.
-            const hue = 190 + Math.min(depth, 11) * 10;
-            Object.assign(d.style, {
-              left: `${b.left + scrollX}px`, top: `${b.top + scrollY}px`,
-              width: `${b.width}px`, height: `${b.height}px`,
-              borderColor: `hsl(${hue} 85% 55% / 0.8)`,
-            });
-            frag.appendChild(d);
+      const seen = new Set();
+      const pageW = document.documentElement.getBoundingClientRect().width;
+      let count = 0;
+      const put = (el, role, solid) => {
+        if (count > LIMITS.rulerNodes || !SHOW[role]) return;
+        const b = el.getBoundingClientRect();
+        if (b.width < 60 || b.height < 24) return;
+        const r = { left: b.left + scrollX, top: b.top + scrollY, width: b.width, height: b.height };
+        const key = `${role}:${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        count++;
+        const d = document.createElement("div");
+        d.className = "snk-rbox";
+        Object.assign(d.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, borderColor: ROLE[role], borderStyle: solid ? "solid" : "dashed" });
+        frag.appendChild(d);
+        if (SHOW.sizes) {
+          const tag = document.createElement("div");
+          tag.className = "snk-rtag";
+          tag.textContent = `${Math.round(r.width)} x ${Math.round(r.height)}`;
+          Object.assign(tag.style, { left: `${r.left}px`, top: `${r.top}px`, background: ROLE[role] });
+          frag.appendChild(tag);
+        }
+        if (role === "container" && SHOW.gaps) {
+          const bandH = Math.min(r.height, 60);
+          for (const [x, w] of [[0, Math.round(r.left)], [Math.round(r.left + r.width), Math.round(pageW - r.left - r.width)]]) {
+            if (w <= 1 || w >= pageW) continue;
+            const g = document.createElement("div");
+            g.className = "snk-rgap";
+            Object.assign(g.style, { left: `${x}px`, top: `${r.top}px`, width: `${w}px`, height: `${bandH}px` });
+            const t = document.createElement("div");
+            t.className = "snk-rgaptag";
+            t.textContent = `${w}`;
+            g.appendChild(t);
+            frag.appendChild(g);
           }
-          walk(kid, depth + 1);
         }
       };
-      walk(document.body, 0);
+      document.querySelectorAll("header, nav, aside, footer").forEach((el) => put(el, "region", false));
+      document.querySelectorAll("section, main > div, [class*='section']").forEach((el) => put(el, "section", false));
+      for (const el of document.querySelectorAll("body *")) {
+        if (el.id === ROOT_ID || count > LIMITS.rulerNodes) continue;
+        const d = getComputedStyle(el).display;
+        if (!/^(inline-)?(flex|grid)$/.test(d)) continue;
+        const b = el.getBoundingClientRect();
+        if (b.width < 200 || b.height < 48) continue;
+        put(el, "container", false);
+        for (const kid of el.children) {
+          const kr = kid.getBoundingClientRect();
+          if (kr.width >= 80 && kr.height >= 40 && kr.width <= b.width * 0.98) put(kid, "panel", true);
+        }
+      }
       layer.appendChild(frag);
-      panel.querySelector(".snk-legend").textContent = `X-ray: structure only, no judgement. ${seen} boxes on this page, cyan sits shallow and violet sits deep. Your findings are the list above.`;
+      panel.querySelector(".snk-legend").innerHTML =
+        `Ruler: ${count} boxes, sizes in px. <b style="color:${ROLE.region}">Region</b> <b style="color:${ROLE.section}">Section</b> <b style="color:${ROLE.container}">Container</b> <b style="color:${ROLE.panel}">Panel</b>. Purple bands are the gap to each side. No judgement here, your findings are the list above.`;
     };
-    on(panel.querySelector(".snk-xray"), "click", (ev) => {
-      xray = !xray;
+    for (const cb of panel.querySelectorAll(".snk-opts input")) {
+      on(cb, "change", () => { SHOW[cb.dataset.k] = cb.checked; if (ruler) drawRuler(); });
+    }
+    on(panel.querySelector(".snk-ruler"), "click", (ev) => {
+      ruler = !ruler;
       const btn = ev.currentTarget;
-      btn.classList.toggle("snk-on", xray);
-      btn.setAttribute("aria-pressed", String(xray));
-      if (xray) { drawXray(); list.querySelectorAll(".snk-item").forEach((b) => b.classList.remove("snk-current")); }
+      btn.classList.toggle("snk-on", ruler);
+      btn.setAttribute("aria-pressed", String(ruler));
+      panel.querySelector(".snk-opts").hidden = !ruler;
+      if (ruler) { drawRuler(); list.querySelectorAll(".snk-item").forEach((b) => b.classList.remove("snk-current")); }
       else {
         panel.querySelector(".snk-legend").textContent = "Click an issue to jump to it. Red = off, green = the value the siblings agree on.";
         if (issues.length) activate(issues[0]); else clearGuides();
