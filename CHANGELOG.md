@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 - 2026-09-11
+## 1.1.0 - 2026-09-13
 
 - Single-pass scan: rect and computed style read once per element, 8000-node budget, hidden subtrees skipped
 - overlay.js split into 4 named stages (scanPage, analyze, buildReport, mount) that the tests drive independently
