@@ -384,11 +384,17 @@
       <div class="snk-tools">
         <span class="snk-count${issues.length ? "" : " snk-count-ok"}"></span>
         <button class="snk-btn snk-all" type="button" title="Draw every guide on the page at once">All</button>
-        <button class="snk-btn snk-ruler" type="button" title="Measure the layout: every region, section, container and panel with its size and side gaps" aria-pressed="false">Ruler</button>
+
         <button class="snk-btn snk-copy" type="button" title="Copy the report for an agent">Copy</button>
       </div>
     </header>
-      <div class="snk-opts" hidden>
+      <div class="snk-views" role="group" aria-label="Page views">
+      <button class="snk-chip snk-ruler" type="button" title="Measure the layout: region, section, container and panel with sizes and side gaps" aria-pressed="false">Ruler</button>
+      <button class="snk-chip snk-xray" type="button" title="Every box outlined, cyan where it sits shallow and violet where it nests deep" aria-pressed="false">X-ray</button>
+      <button class="snk-chip snk-heat" type="button" title="Thermal map: the deeper a box is buried, the hotter it burns" aria-pressed="false">Heat</button>
+      <button class="snk-chip snk-night" type="button" title="Night vision: the page through green phosphor, with every edge lit" aria-pressed="false">Night</button>
+    </div>
+    <div class="snk-opts" hidden>
       <span class="snk-opts-title">Layers</span>
       <label><input type="checkbox" data-k="region" checked><i style="background:#e11d48"></i>Region</label>
       <label><input type="checkbox" data-k="section" checked><i style="background:#2563eb"></i>Section</label>
@@ -465,7 +471,7 @@
       layer.appendChild(frag);
     };
     const activate = (i) => {
-      if (ruler) { ruler = false; const b = panel.querySelector(".snk-ruler"); b.classList.remove("snk-on"); b.setAttribute("aria-pressed", "false"); panel.querySelector(".snk-opts").hidden = true; }
+      if (mode !== "none") setMode("none");
       draw([i], i);
       list.querySelectorAll(".snk-item").forEach((b) => {
         const on = b.dataset.n === String(i.n);
@@ -556,24 +562,125 @@
     for (const cb of panel.querySelectorAll(".snk-opts input")) {
       on(cb, "change", () => { SHOW[cb.dataset.k] = cb.checked; if (ruler) drawRuler(); });
     }
-    on(panel.querySelector(".snk-ruler"), "click", (ev) => {
-      ruler = !ruler;
-      const btn = ev.currentTarget;
-      btn.classList.toggle("snk-on", ruler);
-      btn.setAttribute("aria-pressed", String(ruler));
-      panel.querySelector(".snk-opts").hidden = !ruler;
-      if (ruler) { drawRuler(); list.querySelectorAll(".snk-item").forEach((b) => b.classList.remove("snk-current")); }
-      else {
-        panel.querySelector(".snk-legend").textContent = "Click an issue to jump to it. Red = off, green = the value the siblings agree on.";
-        if (issues.length) activate(issues[0]); else clearGuides();
+    // X-ray answers a different question from Ruler: not how big a box is, but how deeply it is
+    // buried. Every element, outlined only, cyan shallow to violet deep. Never red or green,
+    // which already mean wrong and right on every guide.
+    const drawXray = () => {
+      sizeLayer(); clearGuides();
+      const frag = document.createDocumentFragment();
+      let seen = 0;
+      const walk = (el, depth) => {
+        if (seen > LIMITS.rulerNodes) return;
+        for (const kid of el.children) {
+          if (kid.id === ROOT_ID) continue;
+          const cs = getComputedStyle(kid);
+          if (cs.display === "none" || cs.visibility === "hidden") continue;
+          const b = kid.getBoundingClientRect();
+          if (b.width > 2 && b.height > 2) {
+            seen++;
+            const d = document.createElement("div");
+            d.className = "snk-xbox";
+            Object.assign(d.style, {
+              left: `${b.left + scrollX}px`, top: `${b.top + scrollY}px`,
+              width: `${b.width}px`, height: `${b.height}px`,
+              borderColor: `hsl(${190 + Math.min(depth, 11) * 10} 85% 55% / 0.8)`,
+            });
+            frag.appendChild(d);
+          }
+          walk(kid, depth + 1);
+        }
+      };
+      walk(document.body, 0);
+      layer.appendChild(frag);
+      panel.querySelector(".snk-legend").textContent = `X-ray: structure only, no judgement. ${seen} boxes on this page, cyan sits shallow and violet sits deep. Your findings are the list above.`;
+    };
+
+    // FLIR: the classic thermal ramp, black through violet and red to white, driven by how deeply
+    // a box is buried. Filled, unlike X-ray, because a heat map without fill is just an outline.
+    const HEAT = ["#0b0033", "#3b0f70", "#7b2382", "#b5367a", "#e05c5c", "#f08f3c", "#f7c531", "#fdf6b2"];
+    const drawHeat = () => {
+      sizeLayer(); clearGuides();
+      // Collect first, then colour. A fixed 8-step ramp leaves a shallow page entirely violet,
+      // so the scale is normalised to the deepest box actually on this page: whatever is most
+      // buried here burns white, whatever sits on the surface stays cold.
+      const found = [];
+      let deepest = 1;
+      const walk = (el, depth) => {
+        if (found.length > LIMITS.rulerNodes) return;
+        for (const kid of el.children) {
+          if (kid.id === ROOT_ID) continue;
+          const cs = getComputedStyle(kid);
+          if (cs.display === "none" || cs.visibility === "hidden") continue;
+          const b = kid.getBoundingClientRect();
+          if (b.width > 2 && b.height > 2) { found.push({ b, depth }); if (depth > deepest) deepest = depth; }
+          walk(kid, depth + 1);
+        }
+      };
+      walk(document.body, 0);
+      const frag = document.createDocumentFragment();
+      for (const { b, depth } of found) {
+        const d = document.createElement("div");
+        d.className = "snk-heatbox";
+        const c = HEAT[Math.min(HEAT.length - 1, Math.round((depth / deepest) * (HEAT.length - 1)))];
+        Object.assign(d.style, { left: `${b.left + scrollX}px`, top: `${b.top + scrollY}px`, width: `${b.width}px`, height: `${b.height}px`, background: c, borderColor: c });
+        frag.appendChild(d);
       }
-    });
+      layer.appendChild(frag);
+      panel.querySelector(".snk-legend").textContent = `Heat: ${found.length} boxes over ${deepest} levels. Cold violet sits on the surface, white hot is the most deeply buried on this page. Structure only, your findings are the list above.`;
+    };
+
+    // Night vision: the page itself through green phosphor, plus scanlines and a lit edge on
+    // every box. The filter lives on the page, so it comes off with the mode and on close.
+    const drawNight = () => {
+      sizeLayer(); clearGuides();
+      document.documentElement.classList.add("snk-nv");
+      const frag = document.createDocumentFragment();
+      const scan = document.createElement("div");
+      scan.className = "snk-scanlines";
+      frag.appendChild(scan);
+      let seen = 0;
+      for (const el of document.querySelectorAll("body *")) {
+        if (seen > LIMITS.rulerNodes) break;
+        if (el.id === ROOT_ID) continue;
+        const cs = getComputedStyle(el);
+        if (cs.display === "none" || cs.visibility === "hidden") continue;
+        const b = el.getBoundingClientRect();
+        if (b.width < 8 || b.height < 8) continue;
+        seen++;
+        const d = document.createElement("div");
+        d.className = "snk-nvbox";
+        Object.assign(d.style, { left: `${b.left + scrollX}px`, top: `${b.top + scrollY}px`, width: `${b.width}px`, height: `${b.height}px` });
+        frag.appendChild(d);
+      }
+      layer.appendChild(frag);
+      panel.querySelector(".snk-legend").textContent = `Night vision: ${seen} boxes lit. The page is tinted, not changed, and the tint comes off with the mode.`;
+    };
+
+    const LEGEND = "Click an issue to jump to it. Red = off, green = the value the siblings agree on.";
+    // 2 views of the same page, so only 1 can be on at a time
+    let mode = "none";
+    const DRAW = { ruler: drawRuler, xray: drawXray, heat: drawHeat, night: drawNight };
+    const setMode = (want) => {
+      mode = want === mode ? "none" : want;
+      ruler = mode === "ruler";
+      document.documentElement.classList.toggle("snk-nv", mode === "night");
+      for (const name of ["ruler", "xray", "heat", "night"]) {
+        const btn = panel.querySelector(`.snk-${name}`);
+        btn.classList.toggle("snk-on", mode === name);
+        btn.setAttribute("aria-pressed", String(mode === name));
+      }
+      panel.querySelector(".snk-opts").hidden = !ruler;
+      if (mode === "none") { panel.querySelector(".snk-legend").textContent = LEGEND; if (issues.length) activate(issues[0]); else clearGuides(); return; }
+      DRAW[mode]();
+      list.querySelectorAll(".snk-item").forEach((b) => { b.classList.remove("snk-current"); b.removeAttribute("aria-current"); });
+    };
+    for (const name of ["ruler", "xray", "heat", "night"]) on(panel.querySelector(`.snk-${name}`), "click", () => setMode(name));
 
     const returnFocusTo = document.activeElement;
     const close = (notify = true) => {
       ac.abort();
       root.remove();
-      document.documentElement.classList.remove("snk-docked"); // give the page its width back
+      document.documentElement.classList.remove("snk-docked", "snk-nv"); // page gets its width and its colours back
       delete window.__snakeEyes;
       // hand focus back where it was rather than dropping the keyboard user on <body>
       if (returnFocusTo && returnFocusTo.isConnected && typeof returnFocusTo.focus === "function") returnFocusTo.focus({ preventScroll: true });

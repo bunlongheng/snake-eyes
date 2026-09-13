@@ -32,7 +32,7 @@ async function inject(page) {
   await page.waitForFunction(() => window.__snakeEyes && window.__snakeEyes.ready);
   return page.evaluate(() => ({ issues: window.__snakeEyes.issues, total: window.__snakeEyes.total, dropped: window.__snakeEyes.dropped, report: window.__snakeEyes.report() }));
 }
-const inShadow = (page, fn) => page.evaluate(fn);
+const inShadow = (page, fn, arg) => page.evaluate(fn, arg);
 
 // ---------- fixture: exact set ----------
 const page = await context.newPage();
@@ -250,6 +250,26 @@ await inShadow(rule, () => { window.__snakeEyes.shadow.querySelector(".snk-ruler
 await rule.waitForTimeout(200);
 check(await inShadow(rule, () => { const sh = window.__snakeEyes.shadow; return sh.querySelectorAll(".snk-rbox").length === 0 && sh.querySelector(".snk-opts").getBoundingClientRect().height === 0; }), "turning Ruler off clears it and the toggles take up no space");
 await hiddenWorks(rule, "with Ruler off");
+
+// ---------- the 4 views are one at a time, and each cleans up after itself ----------
+const view = async (name) => {
+  await inShadow(rule, (n) => { window.__snakeEyes.shadow.querySelector(`.snk-${n}`).click(); }, name);
+  await rule.waitForTimeout(280);
+  return inShadow(rule, () => {
+    const sh = window.__snakeEyes.shadow;
+    const pressed = ["ruler", "xray", "heat", "night"].filter((n) => sh.querySelector(`.snk-${n}`).getAttribute("aria-pressed") === "true");
+    return { pressed, boxes: sh.querySelectorAll(".snk-rbox, .snk-xbox, .snk-heatbox, .snk-nvbox").length, tinted: document.documentElement.classList.contains("snk-nv") };
+  });
+};
+for (const name of ["ruler", "xray", "heat", "night"]) {
+  const v = await view(name);
+  check(v.pressed.length === 1 && v.pressed[0] === name, `${name} is the only view pressed (${v.pressed.join(", ") || "none"})`);
+  check(v.boxes > 0, `${name} draws ${v.boxes} boxes`);
+  check(v.tinted === (name === "night"), `${name}: the page tint is ${name === "night" ? "on" : "off"}`);
+}
+const off = await view("night"); // clicking the active view turns it off
+check(off.pressed.length === 0 && off.tinted === false, "clicking the active view turns it off and removes the page tint");
+check(await rule.evaluate(() => !document.documentElement.classList.contains("snk-nv")), "night vision leaves no filter on the page");
 await rule.close();
 
 // ---------- Re-scan closes the overlay and asks the worker for a fresh pass ----------

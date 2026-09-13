@@ -41,6 +41,15 @@
   padding is no longer compared at all, since section rhythm already covers vertical spacing, and
   uneven side padding is reported only when the element's own same-kind siblings disagree with it.
   That page now reports 4 issues instead of 42.
+- 4 page views, one at a time, on their own row: Ruler, X-ray, Heat and Night. Each is structure
+  only and none of them is a verdict.
+- X-ray is back alongside Ruler rather than replaced by it. They answer different questions: Ruler
+  is how big and how much room, X-ray is how deeply buried.
+- Heat is a thermal map, normalised to the deepest box on the page so the ramp always spans rather
+  than leaving a shallow page a single flat colour.
+- Night vision tints the page through green phosphor with scanlines and lit edges. The filter goes
+  on body, never on html, or it would tint the panel along with the site, and it comes off with the
+  mode and on close.
 - Ruler: outlines every region, section, layout container and panel in its own colour, labels each with its size in px, and draws the gap to each side of the page as a purple band. Layer toggles let you show only what you are looking at. It replaces the earlier X-ray depth view, which said less.
 - Re-scan moved to a refresh icon beside collapse and close, so the toolbar reads as 3 actions and 3 controls.
 - A snake animates across the panel while the page is measured.

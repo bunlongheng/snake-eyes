@@ -7,4 +7,9 @@
 html.snk-docked { width: calc(100% - clamp(300px, 20%, 484px)) !important; min-width: 0 !important; overflow-x: hidden !important; }
 @media (max-width: 600px) { html.snk-docked { width: 100% !important; } }
 
+/* Night vision tints the page itself. The filter goes on body, never on html: the overlay root is
+   a child of html, so filtering html would tint our own panel along with the site. It is only a
+   filter, so nothing in the document changes and removing the class puts every colour back. */
+html.snk-nv > body { filter: grayscale(1) sepia(1) hue-rotate(55deg) saturate(4.5) brightness(0.85) contrast(1.15) !important; }
+
 #snake-eyes-root { all: initial !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: 2147483646 !important; display: block !important; }
