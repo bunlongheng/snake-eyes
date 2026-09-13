@@ -23,8 +23,10 @@
   padding is no longer compared at all, since section rhythm already covers vertical spacing, and
   uneven side padding is reported only when the element's own same-kind siblings disagree with it.
   That page now reports 4 issues instead of 42.
-- X-ray button: paints every box on the page, cool outlines for shallow, warm for deeply nested,
-  so the invisible wrappers behind a confusing finding become visible.
+- X-ray button: outlines every box on the page so the invisible wrappers behind a confusing
+  finding become visible. Cyan sits shallow and violet sits deep. It deliberately avoids red and
+  green, which already mean wrong and right on every guide, and it draws no fill, because the first
+  version read as a verdict when X-ray makes no judgement at all.
 - A snake animates across the panel while the page is measured.
 - Padding findings now shade the padding strip itself instead of drawing a line across it, and the
   highlighted element is labelled with its selector so it is clear which box is meant.

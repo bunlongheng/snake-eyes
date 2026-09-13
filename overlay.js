@@ -489,12 +489,14 @@
             seen++;
             const d = document.createElement("div");
             d.className = "snk-xbox";
-            // 250 (deep blue) down to 0 (red) as nesting grows: shallow is cool, deep is hot
-            const hue = Math.max(0, 250 - depth * 22);
+            // Cyan to violet as nesting grows. Deliberately avoids red and green: those already
+            // mean wrong and right on every guide, and reusing them here read as a verdict when
+            // X-ray makes no judgement at all. No fill either, so the page keeps its own colours.
+            const hue = 190 + Math.min(depth, 11) * 10;
             Object.assign(d.style, {
               left: `${b.left + scrollX}px`, top: `${b.top + scrollY}px`,
               width: `${b.width}px`, height: `${b.height}px`,
-              borderColor: `hsl(${hue} 90% 55% / 0.85)`, background: `hsl(${hue} 90% 55% / 0.05)`,
+              borderColor: `hsl(${hue} 85% 55% / 0.8)`,
             });
             frag.appendChild(d);
           }
@@ -503,7 +505,7 @@
       };
       walk(document.body, 0);
       layer.appendChild(frag);
-      panel.querySelector(".snk-legend").textContent = `X-ray: ${seen} boxes on this page, cool outlines are shallow, warm ones are deeply nested.`;
+      panel.querySelector(".snk-legend").textContent = `X-ray: structure only, no judgement. ${seen} boxes on this page, cyan sits shallow and violet sits deep. Your findings are the list above.`;
     };
     on(panel.querySelector(".snk-xray"), "click", (ev) => {
       xray = !xray;
