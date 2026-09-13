@@ -54,14 +54,17 @@
   /* the narrow sheet drops the wordy button and keeps Copy, the one that matters */
   .snk-panel .snk-all { display: none; }
 }
-.snk-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--snk-line); background: var(--snk-bg2); }
+/* Wraps rather than truncates. Font metrics differ per platform, so a header sized to fit on
+   1 machine will overflow on another; letting the controls drop to a second row keeps every
+   label readable and every button reachable at any width, on any font. */
+.snk-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--snk-line); background: var(--snk-bg2); }
 /* The name never truncates: it is the thing that says what this panel is. The count pill is the
    flexible item instead, and the panel is wide enough to hold the whole header at its default size. */
 .snk-title-h { margin: 0; font-size: 13px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
 .snk-logo { display: inline-flex; gap: 3px; width: 26px; height: 26px; border-radius: 8px; background: #0b1220; align-items: center; justify-content: center; flex-shrink: 0; }
 .snk-logo i { display: block; width: 7px; height: 10px; border-radius: 50%; background: #d1fa4a; position: relative; }
 .snk-logo i::after { content: ""; position: absolute; left: 3px; top: 1px; width: 1.5px; height: 8px; background: #0b1220; border-radius: 1px; }
-.snk-count { margin-right: auto; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 700; color: var(--snk-high-fg); background: var(--snk-high-bg); border-radius: 999px; padding: 2px 9px; font-size: 12px; white-space: nowrap; }
+.snk-count { margin-right: auto; flex-shrink: 0; font-weight: 700; color: var(--snk-high-fg); background: var(--snk-high-bg); border-radius: 999px; padding: 2px 9px; font-size: 12px; white-space: nowrap; }
 .snk-count-ok { color: var(--snk-low-fg); background: var(--snk-low-bg); }
 .snk-btn { flex-shrink: 0; font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--snk-line); background: var(--snk-bg); color: var(--snk-fg); cursor: pointer; white-space: nowrap; }
 .snk-btn:hover { background: var(--snk-hover); }

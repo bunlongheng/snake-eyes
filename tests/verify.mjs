@@ -142,6 +142,20 @@ for (const [w, want] of [[390, 6], [768, 6]]) {
   await p.close();
 }
 
+// ---------- a deliberately cramped panel must wrap, never truncate ----------
+// CI runs on Linux, where the system font is wider than the one this was designed against, so a
+// header sized to fit locally overflowed there. The header wraps now; this pins that behaviour.
+const cramped = await context.newPage();
+await cramped.goto("file://" + join(here, "fixture.html"));
+await cramped.addStyleTag({ content: css });
+await cramped.evaluate((c) => { window.__SNAKE_EYES_CSS__ = c + "\n.snk-panel{width:300px !important}"; window.__snakeEyesTest = true; }, panelCss);
+await cramped.addScriptTag({ content: pure });
+await cramped.addScriptTag({ content: js });
+await cramped.waitForFunction(() => window.__snakeEyes && window.__snakeEyes.ready);
+await headerFits(cramped, "header in a 300px panel");
+check(await inShadow(cramped, () => window.__snakeEyes.shadow.querySelector(".snk-head").getBoundingClientRect().height > 40), "a panel too narrow for 1 row wraps the header instead of clipping it");
+await cramped.close();
+
 // ---------- the panel goes stale when the viewport changes under it ----------
 const stale = await context.newPage();
 await stale.setViewportSize({ width: 1280, height: 900 });
