@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- X-ray works. It never did: overlay.js created .snk-xbox nodes and panel.css had no rule for
+  them at all, so 1200 divs went onto the page carrying an inline border-colour with no position
+  and no border-width, which paints nothing. Every view now has a test that its boxes are visible,
+  not merely present, because counting the nodes would have passed all along.
 - Labels stop falling off the page. A badge is centred on the point it labels and a box caption
   sits above its box, so a section flush with y=0 pushed both off the top: "0px (expected 48)",
   the one value worth reading, was the one you could not read.

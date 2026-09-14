@@ -52,6 +52,10 @@
 .snk-chip.snk-on { background: var(--snk-primary-bg); color: var(--snk-primary-fg); border-color: var(--snk-primary-bg); }
 .snk-chip:focus-visible { outline: 2px solid var(--snk-focus); outline-offset: 2px; }
 
+/* X-ray: outlines only, hue set inline by depth. This rule was missing outright, so overlay.js
+   was appending 1200 divs that had an inline border-colour but no position and no border-width,
+   which paints nothing: X-ray looked broken because it drew an invisible page. */
+.snk-xbox { position: absolute; border: 1px solid; }
 /* FLIR: filled, because a heat map without fill is just an outline */
 .snk-heatbox { position: absolute; border: 1px solid; opacity: 0.55; mix-blend-mode: screen; }
 /* Night vision: lit edges over the tinted page, with phosphor scanlines on top */

@@ -364,6 +364,31 @@ check(/left 44px vs right 20px/.test(otext), "padding: uneven sides on a box no 
 check(/Section bottom padding 24px, others use 56px/.test(otext), "rhythm: the section that ends early");
 await other.close();
 
+// ---------- every page view actually paints ----------
+// X-ray shipped broken: overlay.js created .snk-xbox nodes and panel.css had no rule for them, so
+// 1200 divs went onto the page with an inline border-colour, no position and no border-width, and
+// painted nothing. Counting the nodes would have passed. This checks they are visible.
+const views = await context.newPage();
+await views.setContent(`<!doctype html><meta charset=utf-8><body style="margin:0">
+  ${Array.from({ length: 6 }, (_, i) => `<section style="padding:40px"><div><div><p>row ${i}</p></div></div></section>`).join("")}`);
+await inject(views);
+for (const [name, cls] of [["ruler", ".snk-rbox"], ["xray", ".snk-xbox"], ["heat", ".snk-heatbox"], ["night", ".snk-nvbox"]]) {
+  const seen = await views.evaluate(([m, sel]) => {
+    const sh = window.__snakeEyes.shadow;
+    sh.querySelector(`.snk-${m}`).click();
+    const nodes = [...sh.querySelectorAll(sel)];
+    const paints = nodes.filter((n) => {
+      const c = getComputedStyle(n), r = n.getBoundingClientRect();
+      const edge = parseFloat(c.borderTopWidth) > 0 && c.borderTopStyle !== "none";
+      const fill = c.backgroundColor !== "rgba(0, 0, 0, 0)" && c.backgroundColor !== "transparent";
+      return c.position === "absolute" && (edge || fill) && r.width > 2 && r.height > 2;
+    });
+    return { drawn: nodes.length, paints: paints.length };
+  }, [name, cls]);
+  check(seen.drawn > 0 && seen.paints === seen.drawn, `${name}: every box it draws is actually visible (${seen.paints}/${seen.drawn})`);
+}
+await views.close();
+
 // ---------- labels on the page's top edge stay on the page ----------
 // A badge is centred on the point it labels and the caption sits above its box, so a section
 // flush with y=0 used to push both off the top of the page: the 0px value, the one worth reading,
