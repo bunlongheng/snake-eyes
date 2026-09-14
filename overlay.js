@@ -454,8 +454,24 @@
         const tag = document.createElement("div");
         tag.className = "snk-boxtag";
         tag.textContent = caption;
-        Object.assign(tag.style, { left: `${r.left}px`, top: `${Math.max(0, r.top - 20)}px` });
+        Object.assign(tag.style, { left: `${r.left}px`, top: `${Math.max(0, r.top - 22)}px` });
         frag.appendChild(tag);
+      }
+    };
+    // A badge is centred on the point it labels, so one sitting on the page's top or left edge
+    // loses half of itself off the page, which is how a 0px value - the very case worth reading -
+    // came out clipped. Nudge it back inside. Every badge is measured first and moved after, so
+    // the pass costs 1 layout instead of 1 per badge, and it reads our own nodes, never the page.
+    const clampBadges = () => {
+      const badges = layer.querySelectorAll(".snk-badge");
+      if (!badges.length) return;
+      const w = layer.clientWidth, h = layer.clientHeight;
+      const read = [...badges].map((el) => ({ el, hw: el.offsetWidth / 2, hh: el.offsetHeight / 2 }));
+      for (const m of read) {
+        const x = Math.min(Math.max(parseFloat(m.el.style.left), m.hw), Math.max(m.hw, w - m.hw));
+        const y = Math.min(Math.max(parseFloat(m.el.style.top), m.hh), Math.max(m.hh, h - m.hh));
+        m.el.style.left = `${x}px`;
+        m.el.style.top = `${y}px`;
       }
     };
     // read nothing from the page here: rects were stored at analysis time, so this is writes only.
@@ -469,6 +485,7 @@
         gs.forEach((g) => guideNodes(g, frag));
       }
       layer.appendChild(frag);
+      clampBadges();
     };
     const activate = (i) => {
       if (mode !== "none") setMode("none");

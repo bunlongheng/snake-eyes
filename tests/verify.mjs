@@ -364,6 +364,34 @@ check(/left 44px vs right 20px/.test(otext), "padding: uneven sides on a box no 
 check(/Section bottom padding 24px, others use 56px/.test(otext), "rhythm: the section that ends early");
 await other.close();
 
+// ---------- labels on the page's top edge stay on the page ----------
+// A badge is centred on the point it labels and the caption sits above its box, so a section
+// flush with y=0 used to push both off the top of the page: the 0px value, the one worth reading,
+// was the one you could not read.
+const edge = await context.newPage();
+await edge.setContent(`<!doctype html><meta charset=utf-8><style>
+  body { margin:0; font:16px system-ui }
+  section { padding:48px 24px; min-height:160px }
+  #home { padding-top:0; padding-bottom:0 }
+  #home > :first-child { margin-top:0 } #home > :last-child { margin-bottom:0 }
+</style>
+<section id=home><h1>Hero</h1><p>flush with the top of the page</p></section>
+${Array.from({ length: 8 }, (_, i) => `<section><h2>S${i + 2}</h2><p>body</p></section>`).join("")}`);
+await inject(edge);
+const labels = await edge.evaluate(() => {
+  const sh = window.__snakeEyes.shadow;
+  sh.querySelector(".snk-item").click();
+  const L = sh.querySelector(".snk-layer").getBoundingClientRect();
+  return [...sh.querySelectorAll(".snk-badge, .snk-boxtag")].map((el) => {
+    const r = el.getBoundingClientRect();
+    return { text: el.textContent, top: Math.round(r.top - L.top), left: Math.round(r.left - L.left) };
+  });
+});
+const offPage = labels.filter((l) => l.top < 0 || l.left < 0);
+check(labels.length > 0, `the top-edge section is labelled at all (${labels.length} labels)`);
+check(offPage.length === 0, `no label hangs off the top or left of the page${offPage.length ? ": " + offPage.map((l) => `"${l.text}" at ${l.left},${l.top}`).join(" | ") : ""}`);
+await edge.close();
+
 // ---------- a page past the node budget says so ----------
 const huge = await context.newPage();
 await huge.setContent(`<!doctype html><html><body style="margin:0">${"<div><span>x</span></div>".repeat(6000)}</body></html>`);

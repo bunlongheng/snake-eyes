@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Labels stop falling off the page. A badge is centred on the point it labels and a box caption
+  sits above its box, so a section flush with y=0 pushed both off the top: "0px (expected 48)",
+  the one value worth reading, was the one you could not read.
+- The scanning splash sits in the middle of the docked rail instead of the top of it, on the same
+  12px gutters as the panel that replaces it, so it no longer jumps sideways when the scan ends.
+- The selected row in the list is green rather than amber, which is the extension's own colour and
+  no longer reads as a warning next to the real amber medium-severity tier.
+
 ## 1.2.0 - 2026-09-13
 
 - Scanning animation is the snake itself now, breathing over a soft green pulse, instead of 9 dots
