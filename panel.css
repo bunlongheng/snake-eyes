@@ -168,6 +168,14 @@
 .snk-low .snk-tag { background: var(--snk-low-bg); color: var(--snk-low-fg); }
 .snk-title { font-weight: 600; grid-column: 3; }
 .snk-detail { grid-column: 2 / 4; color: var(--snk-fg2); font-size: 12px; }
+/* Which one is this. 5 rows all reading "Uneven side padding on <div>" are the same row 5 times
+   until the selector is on screen, and it was already computed for the report. */
+.snk-where { grid-column: 2 / 4; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--snk-fg2); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* detail says what was measured, why says why that is a defect and why it earned a row. It is
+   quoted off a rule so the 2 lines never read as one run-on sentence. */
+.snk-why { grid-column: 2 / 4; margin-top: 3px; padding-left: 8px; border-left: 2px solid var(--snk-line); color: var(--snk-fg2); font-size: 12px; }
+.snk-why:empty { display: none; }
+.snk-item.snk-current .snk-why { border-left-color: var(--snk-current-line); }
 .snk-empty { padding: 20px 12px; color: var(--snk-fg2); }
 .snk-foot { padding: 8px 12px; border-top: 1px solid var(--snk-line); color: var(--snk-fg2); font-size: 11px; background: var(--snk-bg2); }
 .snk-stale { color: var(--snk-warn); font-weight: 600; }

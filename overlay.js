@@ -14,10 +14,11 @@
   }
   if (!document.body) return false;
 
-  const { TOL, LIMITS, px, same, severityFor, outliers, sameKind } = globalThis.__snkPure;
+  const { TOL, LIMITS, px, same, severityFor, outliers, sameKind, majority } = globalThis.__snkPure;
   // chrome is absent when the tests inject this directly, so every call is guarded.
   const VERSION = (() => { try { return chrome.runtime.getManifest().version; } catch { return "dev"; } })();
   const tellWorker = (type) => { try { if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type }); } catch { /* worker asleep or not an extension context */ } };
+  const NOT_TEXT = new Set(["STYLE", "SCRIPT", "NOSCRIPT", "TEMPLATE"]); // their text is source, never a name
   const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "TEMPLATE", "BR", "HR", "CANVAS", "IFRAME", "OPTION"]);
   const HTML_NS = "http://www.w3.org/1999/xhtml";
 
@@ -93,7 +94,11 @@
       const i = get(el);
       if (i && i.label !== null) return i.label;
       let t = "";
-      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      // SKIP_TAGS keeps <style> and <script> out of the scan but not out of this walk, so a
+      // container holding an inline stylesheet was labelled with its CSS. Reject that text here.
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+        acceptNode: (n) => (NOT_TEXT.has(n.parentNode && n.parentNode.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+      });
       while (t.length < LIMITS.labelChars) {
         const n = w.nextNode();
         if (!n) break;
@@ -167,6 +172,7 @@
         if (diff > TOL) {
           add({ type: "gaps", severity: severityFor(diff), el, title: `Uneven horizontal gaps in ${label(el)}`,
             detail: `${row.items.length} items in a row, gaps ${gaps.map((g) => g.v).join(", ")}px (most are ${exp}px)`,
+            why: `Equal gaps are what make a row read as one set. ${off.length} of ${gaps.length} disagree with the ${exp}px the rest share, so the row looks like it has groups in it that the markup never put there.`,
             expected: `${exp}px between every item`,
             guides: gaps.map((g, i) => hGuide(g.x1, g.x2, g.y, g.v, off.includes(i))) });
         }
@@ -187,6 +193,7 @@
           if (diff > TOL) {
             add({ type: "gaps", severity: severityFor(diff), el, title: `Uneven vertical gaps in ${label(el)}`,
               detail: `${rows.length} stacked blocks, gaps ${gaps.map((g) => g.v).join(", ")}px (most are ${exp}px)`,
+              why: `A stack with one gap out of step reads as 2 groups instead of 1 list. ${off.length} of ${gaps.length} gaps differ from the ${exp}px the rest share.`,
               expected: `${exp}px between every block`,
               guides: gaps.map((g, i) => vGuide(g.y1, g.y2, g.x, `${g.v}px`, off.includes(i))) });
           }
@@ -213,6 +220,7 @@
               add({ type: "align", severity: severityFor(Math.abs(d)), el: o.el,
                 title: `${side === "left" ? "Left" : "Right"} edge off by ${Math.abs(d)}px: ${label(o.el)}`,
                 detail: `${side} edge sits at ${vals[idx]}px, its siblings in ${label(el)} sit at ${exp}px`,
+                why: `A shared edge is what makes a stack read as one column. ${items.length - off.length} of its ${items.length} siblings line up at ${exp}px, and ${Math.abs(d)}px is too small to look intentional and too big to look clean.`,
                 expected: `${side} edge at ${exp}px like its siblings`,
                 guides: [edgeGuide(exp, top, bottom, `${exp}px`, false), edgeGuide(o.r[side], o.r.top, o.r.bottom, `${vals[idx]}px (${d > 0 ? "+" : ""}${d})`, true)] });
             }
@@ -227,7 +235,7 @@
   // one was deliberate. A card with more room at the bottom than the top is a design decision, and
   // so is a 3px optical nudge under a heading. What is NOT a decision is 1 card in a row of 4 with
   // padding the other 3 do not share. So: vertical padding is no longer compared at all (section
-  // rhythm already covers vertical spacing), and horizontal padding is only reported when the
+  // the section check already covers vertical spacing), and horizontal padding is only reported when the
   // element's own same-kind siblings disagree with it.
   const padOf = (el) => { const { cs } = get(el); return [px(cs.paddingLeft), px(cs.paddingRight)]; };
   for (const el of all) {
@@ -249,11 +257,14 @@
     add({ type: "padding", severity: sev === "high" ? "medium" : sev, el,
       title: `Uneven side padding on ${label(el)}`,
       detail: `left ${pl}px vs right ${pr}px${peers.length ? `, and its ${peers.length} sibling${peers.length === 1 ? " does" : "s do"} not use this` : ""}`,
+      why: `${peers.length ? `Its ${peers.length} same-kind sibling${peers.length === 1 ? "" : "s"} set the expectation and none of them pads like this` : "Nothing beside it repeats this padding"}, so the ${diff}px difference pushes the content off centre and reads as a mistake rather than a choice.`,
       expected: `equal left and right padding, or the same values its siblings use`,
       guides: [band(r.left, r.top, pl, r.height, `${pl}px`, pl > pr), band(r.right - pr, r.top, pr, r.height, `${pr}px`, pr > pl)] });
   }
 
-  // 4: section rhythm - top/bottom padding and content inset across page sections
+  // 4: sections - top/bottom padding and content inset compared across the page's sections.
+  // Named "Section" and not "Rhythm": rhythm is what the defect costs you, but the panel chip has
+  // to say WHERE to look, and every other chip already does (Gap, Edge, Padding, Type).
     const sections = all.filter((el) => el.tagName === "SECTION" && get(el).r.width >= innerWidth * LIMITS.sectionWidthRatio && get(el).r.height >= LIMITS.minSectionH);
     if (sections.length >= 2) {
       const pads = sections.map((s) => { const { cs, r } = get(s); return { el: s, r, pt: px(cs.paddingTop), pb: px(cs.paddingBottom) }; });
@@ -264,9 +275,10 @@
         for (const idx of off) {
           const o = pads[idx];
           const y1 = side === "pt" ? o.r.top : o.r.bottom - o[side], y2 = side === "pt" ? o.r.top + o[side] : o.r.bottom;
-          add({ type: "rhythm", severity: severityFor(Math.abs(o[side] - exp)), el: o.el,
+          add({ type: "section", severity: severityFor(Math.abs(o[side] - exp)), el: o.el,
             title: `Section ${side === "pt" ? "top" : "bottom"} padding ${o[side]}px, others use ${exp}px`,
-            detail: `${label(o.el)} breaks the vertical rhythm shared by ${pads.length - off.length} other sections`,
+            detail: `${pads.length - off.length} of the ${pads.length} sections on this page use ${exp}px here, ${label(o.el)} uses ${o[side]}px`,
+            why: `Sections set the spacing a reader learns to expect while scrolling. The seam between this one and the next is ${Math.abs(o[side] - exp)}px ${o[side] > exp ? "wider" : "tighter"} than every other seam on the page, so it reads as a break in the page rather than the next part of it.`,
             expected: `${side === "pt" ? "padding-top" : "padding-bottom"}: ${exp}px`,
             guides: [vGuide(y1, y2, o.r.left + o.r.width / 2, `${o[side]}px (expected ${exp})`, true)] });
         }
@@ -290,15 +302,62 @@
         if (off.length && off.length < insets.length) {
           for (const idx of off) {
             const o = insets[idx], fr = get(o.first).r;
-            add({ type: "rhythm", severity: severityFor(Math.abs(o.inset - exp)), el: o.first,
+            add({ type: "section", severity: severityFor(Math.abs(o.inset - exp)), el: o.first,
               title: `Content inset ${o.inset}px in ${label(o.el)}, other sections use ${exp}px`,
               detail: `the first block starts ${o.inset}px from the section's left edge`,
+              why: `Every section starting its content the same distance from the edge is what gives a page one left margin. ${insets.length - off.length} of ${insets.length} start at ${exp}px, so the text steps in and out as you scroll and the eye has to re-find it here.`,
               expected: `${exp}px inset like the other sections`,
               guides: [edgeGuide(o.r.left + exp, fr.top, fr.bottom, `${exp}px`, false), edgeGuide(fr.left, fr.top, fr.bottom, `${o.inset}px`, true)] });
           }
         }
       }
     }
+
+  // 5: type scale - the same tag rendering at more than 1 size.
+  // A heading level is a size promise: <h2> twice on a page should be the same h2 both times.
+  // Sizes are compared per tag and never between tags, because h2 being smaller than h1 is the
+  // whole point of h2. Unlike every other check this one compares exactly rather than through
+  // TOL: 2px of layout drift is invisible, but a font-size is a number somebody typed, and 22px
+  // sitting among 24px is a second value for a level that is only allowed one.
+  //
+  // Grouped by tag AND first class, the same "is this the same kind of thing" test the padding
+  // check uses. A real page puts <p> to more than 1 job: bunlongheng.com renders its hero line,
+  // its subtitle and its meta strip all as <p>, at 48, 24 and 14px against 16px body copy. Judged
+  // by tag alone that is 3 findings and all 3 are wrong. Judged by tag plus class each of those is
+  // a group of 1 and says nothing, while 10 cards whose <p class="card-body"> disagree still do.
+  const TYPE_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6", "P"]);
+  const byTag = new Map();
+  for (const el of all) {
+    if (!TYPE_TAGS.has(el.tagName) || !el.textContent.trim()) continue;
+    const { cs, r } = get(el);
+    const key = `${el.tagName}|${el.classList[0] || ""}`;
+    if (!byTag.has(key)) byTag.set(key, []);
+    byTag.get(key).push({ el, r, size: px(cs.fontSize) });
+  }
+  for (const [key, items] of byTag) {
+    if (items.length < LIMITS.minTypeSamples) continue;
+    const sizes = items.map((t) => t.size);
+    const exp = majority(sizes);
+    if (exp === null) continue; // no agreed size to break: a deliberate mixed scale, not a defect
+    const off = [];
+    sizes.forEach((v, i) => { if (v !== exp) off.push(i); });
+    if (!off.length) continue;
+    const [tag, cls] = key.split("|");
+    const name = `<${tag.toLowerCase()}>`;
+    for (const idx of off) {
+      const t = items[idx], d = t.size - exp;
+      const ratio = Math.abs(d) / exp;
+      if (ratio > LIMITS.typeMaxRatio) continue; // a different role, not a broken one
+      add({ type: "type", severity: ratio >= LIMITS.typeHighRatio ? "high" : ratio >= LIMITS.typeMedRatio ? "medium" : "low", el: t.el,
+        title: `${label(t.el)} is ${t.size}px, the other ${items.length - off.length} matching ${name} are ${exp}px`,
+        detail: `${t.size}px here against ${exp}px on ${items.length - off.length} of the ${items.length} ${name}${cls ? ` with class "${cls}"` : " with no class"}, ${Math.abs(d)}px ${d > 0 ? "bigger" : "smaller"}`,
+        why: tag === "P"
+          ? `Body copy at 2 sizes reads as 2 kinds of text. This paragraph is ${Math.round(ratio * 100)}% off the ${exp}px its ${items.length - off.length} matching siblings use, so it looks like a caption or a callout when nothing says it is one.`
+          : `A heading level is a size promise: ${items.length - off.length} of the ${items.length} matching ${name} keep it at ${exp}px. This one is ${Math.round(ratio * 100)}% off, close enough that it was meant to match and did not, so the level renders at 2 sizes.`,
+        expected: `font-size: ${exp}px, like every other ${name}`,
+        guides: [band(t.r.left, t.r.top, t.r.width, t.r.height, `${t.size}px (rest use ${exp})`, true)] });
+    }
+  }
 
     // sort by severity first, then cap, so the cap only ever drops the least severe
     const order = { high: 0, medium: 1, low: 2 };
@@ -333,7 +392,7 @@
       if (dropped) lines.push(`- Note: capped at ${LIMITS.maxIssues}; fix these, then re-run for the remaining ${dropped}`);
       if (scanTruncated) lines.push(`- Note: scan stopped after ${LIMITS.maxNodes} elements; the page is larger than that`);
       lines.push(``, `Fix each item below in the source, then re-run Snake Eyes to confirm 0 issues. Selectors are relative to <body>.`, ``);
-      for (const i of issues) lines.push(`## ${i.n}. ${i.title} (${i.severity})`, `- Selector: \`${i.selector}\``, `- Found: ${i.detail}`, `- Expected: ${i.expected}`, ``);
+      for (const i of issues) lines.push(`## ${i.n}. ${i.title} (${i.severity})`, `- Selector: \`${i.selector}\``, `- Found: ${i.detail}`, `- Why it matters: ${i.why}`, `- Expected: ${i.expected}`, ``);
       if (!issues.length) lines.push(`No spacing issues found at this viewport.`);
       return lines.join("\n");
     };
@@ -365,7 +424,7 @@
     sizeLayer();
     shadow.appendChild(layer);
 
-    const TYPE_LABEL = { gaps: "Gap", align: "Edge", padding: "Padding", rhythm: "Rhythm" };
+    const TYPE_LABEL = { gaps: "Gap", align: "Edge", padding: "Padding", section: "Section", type: "Type" };
     const countText = dropped ? `${issues.length} of ${total}` : `${issues.length} issue${issues.length === 1 ? "" : "s"}`;
     const panel = document.createElement("aside");
     panel.className = "snk-panel";
@@ -415,9 +474,17 @@
       btn.type = "button";
       btn.className = `snk-item snk-${i.severity}`;
       btn.dataset.n = i.n;
-      btn.innerHTML = `<span class="snk-n">${i.n}</span><span class="snk-tag">${TYPE_LABEL[i.type]}</span><span class="snk-title"></span><span class="snk-detail"></span>`;
+      btn.innerHTML = `<span class="snk-n">${i.n}</span><span class="snk-tag">${TYPE_LABEL[i.type]}</span><span class="snk-title"></span><span class="snk-where"></span><span class="snk-detail"></span><span class="snk-why"></span>`;
       btn.querySelector(".snk-title").textContent = i.title;
+      // The leaf is what identifies a finding; the ancestors are context you can hover for. Shown
+      // whole, a 5-level selector wraps to 4 lines and buries the 2 words that tell 5 identical
+      // "Uneven side padding on <div>" rows apart.
+      const parts = i.selector.split(" > ");
+      const where = btn.querySelector(".snk-where");
+      where.textContent = parts.length > 2 ? `\u2026 ${parts.slice(-2).join(" > ")}` : i.selector;
+      where.title = i.selector;
       btn.querySelector(".snk-detail").textContent = i.detail;
+      btn.querySelector(".snk-why").textContent = i.why || "";
       on(btn, "click", () => activate(i));
       li.appendChild(btn);
       list.appendChild(li);
@@ -480,7 +547,7 @@
       clearGuides();
       const frag = document.createDocumentFragment();
       for (const i of items) {
-        boxNode(i.r, i === activeIssue, frag, i.selector ? i.selector.split(" > ").pop() : "");
+        boxNode(i.r, i === activeIssue, frag, i.selector ? `${i.n} \u00b7 ${i.selector.split(" > ").pop()}` : `${i.n}`);
         const gs = items.length === 1 ? i.guides : i.guides.filter((g, idx) => g.bad || idx < LIMITS.guideCap);
         gs.forEach((g) => guideNodes(g, frag));
       }

@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-16a34a.svg)](LICENSE)
 [![Zero deps](https://img.shields.io/badge/runtime%20deps-0-eab308.svg)](package.json)
 
-A Chrome extension that looks at the page you are on the way a picky designer does: uneven gaps between cards, a list item nudged 6px to the right, padding that is 16px on 1 side and 24px on the other, a section that breaks the vertical rhythm. Click the icon, it scans the page, draws red guides with the exact numbers, lists every issue in a side panel you can click through, and copies a report an AI agent can act on.
+A Chrome extension that looks at the page you are on the way a picky designer does: uneven gaps between cards, a list item nudged 6px to the right, padding that is 16px on 1 side and 24px on the other, a section padded unlike every other section. Click the icon, it scans the page, draws red guides with the exact numbers, lists every issue in a side panel you can click through, and copies a report an AI agent can act on.
 
 ![Snake Eyes on the fixture page](docs/hero.png)
 
@@ -24,7 +24,14 @@ Nothing runs until you click. The extension asks only for `activeTab` and `scrip
 | Gap | Gaps between 3 or more siblings in a row, or between stacked blocks | Dashed line across each gap with its px value, red when it differs from what the rest agree on |
 | Edge | Left and right edges of stacked siblings | Solid green line at the shared edge, solid red line at the odd one, with the offset |
 | Padding | Left vs right and top vs bottom padding on containers | Dashed spans inside the box with both numbers |
-| Rhythm | Top and bottom padding across page sections, and the content inset in each section | Red span on the section that breaks the pattern, with the expected value |
+| Section | Top and bottom padding across page sections, and the content inset in each section | Red span on the section that breaks the pattern, with the expected value |
+| Type | `font-size` across every `<h1>`-`<h6>` and `<p>` of the same kind | Red band over the odd one, labelled with its size and the size the rest use |
+
+Every finding answers 3 questions, not 1: **what** was measured, **where** it is (the selector, on
+its own line, because 5 rows all reading "Uneven side padding on `<div>`" are the same row 5 times
+without it), and **why** that is a defect, with the count that earned it a row - `4 of the 5
+matching <h2> keep it at 24px`. The why line goes into the report too, so an agent knows what it is
+preserving when it edits.
 
 Everything is measured from the rendered layout at the current viewport, tolerance 2px. Resize and the panel greys out, because every number on screen belongs to the old layout, and a Re-scan button appears to measure the new size.
 
@@ -43,7 +50,9 @@ A spacing auditor is only useful if you trust its silence, so these are skipped 
 - **Centered groups.** Items centered on their parent are meant to have different edges.
 - **Inline and inline-block elements.** A code chip inside a sentence starts wherever the words reach it. 3 chips on 3 lines look like a stack of siblings but were never meant to share an edge, so only block-level boxes are compared.
 - **Anything inside a shadow root or an iframe.** The scan walks the main document only.
-- **Sections that are not `<section>` elements.** The vertical rhythm check looks for real section tags, so a page built from divs gets the other 3 checks but not that one.
+- **Type that is doing a different job.** Sizes are compared per tag *and* first class, and only when they are within 25% of each other. A 48px `<p>` beside 16px body copy is a hero line, not a typo: on bunlongheng.com that rule is the difference between 3 findings, all of them wrong, and silence. The near miss is the defect worth reporting, the value that meant to match its level and does not.
+- **Type under utility-class CSS.** Grouping by first class means `class="text-lg ..."` puts every size in its own group, so a Tailwind-style page gets the other 4 checks but little from Type.
+- **Sections that are not `<section>` elements.** The Section check looks for real section tags, so a page built from divs gets the other 4 checks but not that one.
 
 ## The panel
 
@@ -76,15 +85,17 @@ Fix each item below in the source, then re-run Snake Eyes to confirm 0 issues. S
 ## 1. Uneven vertical gaps in <div> "Paragraph 1 Paragraph 2 (28p..." (high)
 - Selector: `section#stack > div > div.stack`
 - Found: 4 stacked blocks, gaps 16, 28, 16px (most are 16px)
+- Why it matters: A stack with one gap out of step reads as 2 groups instead of 1 list. 1 of 3 gaps differ from the 16px the rest share.
 - Expected: 16px between every block
 
 ## 2. Section top padding 48px, others use 64px (high)
 - Selector: `section#hero`
-- Found: <section> "Hero Section with 48px top p..." breaks the vertical rhythm shared by 6 other sections
+- Found: 6 of the 7 sections on this page use 64px here, <section> "Hero Section with 48px top p..." uses 48px
+- Why it matters: Sections set the spacing a reader learns to expect while scrolling. The seam between this one and the next is 16px tighter than every other seam on the page, so it reads as a break in the page rather than the next part of it.
 - Expected: padding-top: 64px
 ```
 
-Paste it to your coding agent as is: every item has a selector, what was found, and what was expected. The report carries the page origin and path only, never the query string or fragment.
+Paste it to your coding agent as is: every item has a selector, what was found, why it matters, and what was expected. The report carries the page origin and path only, never the query string or fragment.
 
 ## How it works
 

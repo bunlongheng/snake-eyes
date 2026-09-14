@@ -44,8 +44,8 @@ check(/Uneven horizontal gaps/.test(text) && /24, 24, 31px/.test(text), "gap: th
 check(/Uneven vertical gaps/.test(text) && /16, 28, 16px/.test(text), "gap: the 28px stack gap");
 check(/Left edge off by 6px/.test(text), "edge: the 6px indented list item");
 check(/left 16px vs right 24px/.test(text), "padding: the callout");
-check(/top padding 48px, others use 64px/.test(text), "rhythm: hero top padding");
-check(/Content inset \d+px in <section> "About/.test(text), "rhythm: about section inset");
+check(/top padding 48px, others use 64px/.test(text), "section: hero top padding");
+check(/Content inset \d+px in <section> "About/.test(text), "section: about section inset");
 const sev = r.issues.map((i) => ({ high: 0, medium: 1, low: 2 })[i.severity]);
 check(sev.every((s, i) => i === 0 || s >= sev[i - 1]), "issues are sorted high to low");
 check(await page.evaluate(() => window.__snakeEyes.issues.every((i, n) => document.querySelector(i.selector) === window.__snakeEyes.elements[n])), "every selector resolves back to exactly its element");
@@ -361,7 +361,7 @@ const otext = o.issues.map((i) => `${i.title} | ${i.detail}`).join("\n");
 check(o.issues.length === 3, `fixture2: exactly the 3 planted issues (found ${o.issues.length})`);
 check(/Right edge off by 6px/.test(otext), "right edge: the item that stops 6px short");
 check(/left 44px vs right 20px/.test(otext), "padding: uneven sides on a box no sibling matches");
-check(/Section bottom padding 24px, others use 56px/.test(otext), "rhythm: the section that ends early");
+check(/Section bottom padding 24px, others use 56px/.test(otext), "section: the section that ends early");
 await other.close();
 
 // ---------- every page view actually paints ----------
@@ -388,6 +388,49 @@ for (const [name, cls] of [["ruler", ".snk-rbox"], ["xray", ".snk-xbox"], ["heat
   check(seen.drawn > 0 && seen.paints === seen.drawn, `${name}: every box it draws is actually visible (${seen.paints}/${seen.drawn})`);
 }
 await views.close();
+// ---------- type scale: the near miss fires, the different role does not ----------
+const type = await context.newPage();
+await type.setContent(`<!doctype html><meta charset=utf-8><style>
+  body { margin:0; font:16px/1.5 system-ui; padding:40px }
+  .card { margin-bottom:32px }
+  .card-h { font-size:24px; margin:0 0 12px } .card-b { font-size:16px; margin:0 }
+  .card:nth-child(4) .card-h { font-size:22px }   /* 8% off: meant to match, does not */
+  .card:nth-child(6) .card-b { font-size:14px }   /* 13% off */
+  .hero { font-size:48px; margin:0 0 8px }        /* 200% off: a role, not a defect */
+  .lede { font-size:24px; margin:0 0 40px }
+</style>
+<p class=hero>Hi.</p><p class=lede>Senior Full-Stack Developer</p>
+${Array.from({ length: 5 }, (_, i) => `<div class=card><h2 class=card-h>Card ${i + 1}</h2><p class=card-b>body copy ${i + 1}</p></div>`).join("")}`);
+const ty = await inject(type);
+const tset = ty.issues.filter((i) => i.type === "type");
+check(tset.length === 2, `type: exactly the 2 near misses (found ${tset.length}: ${tset.map((i) => i.title).join(" | ")})`);
+check(tset.some((i) => /<h2> "Card 2" is 22px/.test(i.title)), "type: the 22px heading among 24px ones");
+check(tset.some((i) => /<p> "body copy 4" is 14px/.test(i.title)), "type: the 14px body copy among 16px ones");
+check(!tset.some((i) => /48px|Hi\./.test(i.title)), "type: the 48px hero <p> is a different role and stays quiet");
+await type.close();
+
+// ---------- a finding says why it is one, and which one it is ----------
+check(r.issues.every((i) => typeof i.why === "string" && i.why.length > 40), "every issue carries a why line");
+check(/- Why it matters: /.test(r.report), "the report carries the why line for an agent");
+// its own page: the fixture tab was closed further up, and a row is only readable while it exists
+const rowPage = await context.newPage();
+await rowPage.goto("file://" + join(here, "fixture.html"));
+await inject(rowPage);
+const rows = await inShadow(rowPage, () => [...window.__snakeEyes.shadow.querySelectorAll(".snk-item")].map((b) => ({
+  where: b.querySelector(".snk-where").textContent, why: b.querySelector(".snk-why").textContent })));
+check(rows.every((x) => x.where.length > 2), "every row shows the selector, so 2 findings with the same title are told apart");
+check(new Set(rows.map((x) => x.where)).size === rows.length, "those selectors are unique per row");
+check(rows.every((x) => x.why.length > 40), "every row shows its why line");
+await rowPage.close();
+
+// ---------- an inline stylesheet is never an element's name ----------
+const styled = await context.newPage();
+await styled.setContent(`<!doctype html><meta charset=utf-8><body style="margin:0">
+  <div><style>h2 { font-weight: 500; } .lorem { color: red }</style>
+    <div style="padding:20px 20px 20px 44px;width:400px;height:120px">a</div></div></body>`);
+const st = await inject(styled);
+check(!st.issues.some((i) => /font-weight|\{/.test(i.title + i.detail)), `no finding is named after CSS source${st.issues.filter((i) => /\{/.test(i.title)).map((i) => ` (${i.title})`).join("")}`);
+await styled.close();
 
 // ---------- labels on the page's top edge stay on the page ----------
 // A badge is centred on the point it labels and the caption sits above its box, so a section

@@ -6,6 +6,24 @@
   them at all, so 1200 divs went onto the page carrying an inline border-colour with no position
   and no border-width, which paints nothing. Every view now has a test that its boxes are visible,
   not merely present, because counting the nodes would have passed all along.
+- New Type check: the same tag rendering at more than 1 size. A heading level is a size promise,
+  so 4 <h2 class="card-h"> at 24px and a 5th at 22px is a defect, while a 48px <p> hero beside
+  16px body copy is a different job and stays quiet. Sizes are grouped by tag AND first class and
+  compared only within 25% of each other. Judged by tag alone the live portfolio produced 3
+  findings and all 3 were wrong; with both rules it produces none, and a planted near miss still
+  fires. Unlike every other check this one compares exactly rather than through the 2px tolerance:
+  layout drifts, but a font-size is a number somebody typed.
+- Every finding now says where it is and why it is a finding. The selector was computed for the
+  report and never shown, so 5 rows reading "Uneven side padding on <div>" were the same row 5
+  times; it now sits under the title, trimmed to the leaf with the whole thing on hover. The why
+  line states the count that earned the row and what the defect costs the page, in the panel and
+  in the report.
+- The Rhythm chip is called Section. Rhythm is what the defect costs you, not where to look, and
+  every other chip already names a place: Gap, Edge, Padding, Type. The findings dropped the beat
+  metaphor with it and say the count instead - "6 of the 7 sections on this page use 64px here".
+- An inline stylesheet is no longer an element's name. The label walker took every text node under
+  an element, so a container holding a <style> was labelled with its CSS: kactusbio.com reported a
+  finding on <div> "h2 { font-weight: 500; } .lo...".
 - Labels stop falling off the page. A badge is centred on the point it labels and a box caption
   sits above its box, so a section flush with y=0 pushed both off the top: "0px (expected 48)",
   the one value worth reading, was the one you could not read.
