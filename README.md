@@ -54,6 +54,47 @@ A spacing auditor is only useful if you trust its silence, so these are skipped 
 - **Type under utility-class CSS.** Grouping by first class means `class="text-lg ..."` puts every size in its own group, so a Tailwind-style page gets the other 4 checks but little from Type.
 - **Sections that are not `<section>` elements.** The Section check looks for real section tags, so a page built from divs gets the other 4 checks but not that one.
 
+## A whole site, not 1 page
+
+```
+npm run crawl -- https://example.com --depth 1 --out site-report.md
+```
+
+Scans the start page and everything it links to on the same origin, checks every link it finds
+including the off-site ones, and writes 1 markdown report: a page-by-page table, the dead links
+with the page each was found on, and the full findings per page.
+
+| Flag | Default | What it does |
+|------|---------|--------------|
+| `--depth` | `1` | How many hops from the start page to follow. 1 is the start page and its links |
+| `--max` | `25` | Hard cap on pages scanned |
+| `--width` | `1280` | Viewport width to measure at |
+| `--out` | stdout | Write the report to a file instead |
+
+This is a script and not a button in the panel because the extension holds `activeTab`, which is
+permission to read the 1 tab you clicked and nothing else. Reading a second page needs
+`host_permissions` for the whole web, and a spacing tool asking to read every site you visit is a
+worse trade than running the crawl yourself. The engine is identical either way: `lib/pure.js` and
+`overlay.js` injected exactly as `background.js` injects them, so a finding here is the finding the
+panel would show on that page. It scans undocked, because docking narrows the page to 80% and a
+site report should describe the layout visitors actually get.
+
+### Links are sorted by what the status means
+
+A link checker that reports everything non-200 as broken is one nobody reads twice. The first run of
+this called 15 healthy pages dead because it had asked for them all at once and been rate limited.
+
+| Verdict | Statuses | Why |
+|---------|----------|-----|
+| Dead | 404, 410, no DNS record, connection refused | The page is genuinely gone |
+| Broken | 5xx | The server is failing on it |
+| Unverified | 401, 403, 429, 999, protocol errors | The server declined to answer a crawler. Says nothing about whether the page works, so it is listed separately and never counted as dead |
+
+Same-origin links go through a narrow spaced queue and off-site links go wide, a 429 is retried
+once after a backoff, and requests carry a real User-Agent so bot filters do not turn every
+external link into a false alarm. URLs that are files are link-checked but never scanned, whether
+they say so with an extension or only with a `Content-Disposition`.
+
 ## The panel
 
 On a window 1200px or wider the panel docks: the page narrows to about 80% and the panel takes the

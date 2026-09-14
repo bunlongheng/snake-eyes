@@ -6,6 +6,17 @@
   them at all, so 1200 divs went onto the page carrying an inline border-colour with no position
   and no border-width, which paints nothing. Every view now has a test that its boxes are visible,
   not merely present, because counting the nodes would have passed all along.
+- `npm run crawl -- <url>` runs the whole engine across a site instead of 1 page: every page 1 hop
+  from the start, every link checked including the off-site ones, 1 markdown report. It is a script
+  and not a panel button because the extension holds activeTab and reading a 2nd page would mean
+  asking for host permission to the entire web.
+- Link verdicts are sorted by what the status means. Dead is 404, 410 and a name that does not
+  resolve; broken is 5xx; 401, 403, 429 and LinkedIn's 999 are unverified, because a server
+  refusing a crawler says nothing about whether the page works. The first run of the crawler called
+  15 healthy pages dead after rate limiting itself, so same-origin requests now go through a narrow
+  spaced queue, a 429 is retried once, and requests carry a real User-Agent.
+- The crawler scans undocked. Docking narrows the page to 80% so the panel does not cover it, which
+  is right for a human reading the panel and wrong for a report about what visitors actually get.
 - New Type check: the same tag rendering at more than 1 size. A heading level is a size promise,
   so 4 <h2 class="card-h"> at 24px and a 5th at 22px is a defect, while a 48px <p> hero beside
   16px body copy is a different job and stays quiet. Sizes are grouped by tag AND first class and

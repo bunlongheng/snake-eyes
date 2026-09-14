@@ -832,7 +832,10 @@
   // a layout the panel is now covering.
   // Docking narrows the page, which can cross a responsive breakpoint and change the very layout
   // being audited. Only wide windows have room to give up a strip and still be the same design.
-  const canDock = innerWidth >= LIMITS.dockMinWidth;
+  // __snakeEyesNoDock is how the crawler opts out. Docking narrows the page to 80% so the panel
+  // does not cover it, which is right when a human is reading the panel and wrong when nobody is:
+  // a site report must describe the layout visitors actually get, not one squeezed by a panel.
+  const canDock = innerWidth >= LIMITS.dockMinWidth && !window.__snakeEyesNoDock;
   if (canDock) document.documentElement.classList.add("snk-docked");
   const splash = showSnake();
   // a second click, or Escape, must cancel a scan in flight, so the handle exists from frame 1
