@@ -120,7 +120,7 @@ Origin and path only, never the query string.
 | [Architecture](https://flows-bheng.vercel.app/?id=68d4e219-832e-4ad3-b801-6494b1089e3a) | The pieces, and the crawl reusing them |
 | [Click to report](https://sequences-bheng.vercel.app/d/934d6cbc-86d6-4650-9934-78683b094f6c) | Click to clipboard, and the teardown |
 
-[![Click to report](https://sequences-bheng.vercel.app/svg/934d6cbc-86d6-4650-9934-78683b094f6c)](https://sequences-bheng.vercel.app/d/934d6cbc-86d6-4650-9934-78683b094f6c)
+[![Click to report](https://sequences-bheng.vercel.app/svg/934d6cbc-86d6-4650-9934-78683b094f6c?v=2)](https://sequences-bheng.vercel.app/d/934d6cbc-86d6-4650-9934-78683b094f6c)
 
 It adds 1 element, `#snake-eyes-root`, with a closed shadow root inside. Page CSS cannot restyle it, page script cannot reach it, and your DOM is never edited.
 
