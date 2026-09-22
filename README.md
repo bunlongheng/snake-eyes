@@ -1,65 +1,117 @@
-# Snake Eyes
+# <img src="docs/icon.png" width="36" height="36" align="top" alt=""> Snake Eyes
 
-[![CI](https://github.com/bunlongheng/snake-eyes/actions/workflows/ci.yml/badge.svg)](https://github.com/bunlongheng/snake-eyes/actions/workflows/ci.yml)
-[![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-2563eb.svg)](manifest.json)
-[![License: MIT](https://img.shields.io/badge/license-MIT-16a34a.svg)](LICENSE)
-[![Zero deps](https://img.shields.io/badge/runtime%20deps-0-eab308.svg)](package.json)
+Spacing auditor for any page, in your browser.
 
-A Chrome extension that looks at the page you are on the way a picky designer does: uneven gaps between cards, a list item nudged 6px to the right, padding that is 16px on 1 side and 24px on the other, a section that breaks the vertical rhythm. Click the icon, it scans the page, draws red guides with the exact numbers, lists every issue in a side panel you can click through, and copies a report an AI agent can act on.
+Click the icon and it looks at the page the way a picky designer does: uneven gaps between cards, a list item nudged 6px right, a section padded unlike every other section, a heading rendering at 2 sizes. It draws the guides with the exact numbers, lists every finding in a side panel you can click through, and hands you a markdown report your coding agent can act on. Nothing runs until you click, nothing leaves the browser, and it never edits your DOM.
 
 ![Snake Eyes on the fixture page](docs/hero.png)
 
-## Install
+[![CI](https://github.com/bunlongheng/snake-eyes/actions/workflows/ci.yml/badge.svg)](https://github.com/bunlongheng/snake-eyes/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Chrome](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=node.js&logoColor=white)
+![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-000000)
+
+## Features
+
+- **One click, and nothing before it** - no background scanning, no content script on page load. It asks for `activeTab` and `scripting` only, so it can reach the 1 tab you clicked and only while you are on it.
+- **5 checks on the rendered layout** - gaps, edges, padding, section rhythm and type scale, all measured from bounding boxes at the current viewport with a 2px tolerance. A 24px gap made of margin plus padding is still a 24px gap.
+- **Every finding says where and why** - the selector on its own line, the count that earned it a row, and the reason it is a defect. The why travels into the report, so an agent knows what it is preserving when it edits.
+- **A report you can paste** - markdown on the clipboard: selector, what was found, why it matters, what was expected.
+- **A whole site in 1 command** - `npm run crawl` runs the same engine across every page on the origin and link-checks everything it finds, off-site links included.
+- **4 ways to look at the page** - guides, X-ray, Heat and Night, with a Ruler switch that lays over any of them.
+- **Silence you can trust** - 14 shapes it refuses to guess at, each one a rule with a measured case behind it.
+
+## Quick start
 
 1. Clone or download this repo.
 2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, pick the folder.
 3. Pin the icon. Click it on any page to audit, click again to clear. Keyboard: `Alt+Shift+S` (change it at `chrome://extensions/shortcuts`).
 
-Nothing runs until you click. The extension asks only for `activeTab` and `scripting`, so it can only touch the tab you clicked on, and only then. To audit a local `file://` page, enable **Allow access to file URLs** on the extension's details page.
+To audit a local `file://` page, enable **Allow access to file URLs** on the extension's details page.
 
 ## What it catches
 
 | Check | What it compares | Guide it draws |
 |-------|------------------|----------------|
 | Gap | Gaps between 3 or more siblings in a row, or between stacked blocks | Dashed line across each gap with its px value, red when it differs from what the rest agree on |
-| Edge | Left and right edges of stacked siblings | Solid green line at the shared edge, solid red line at the odd one, with the offset |
-| Padding | Left vs right and top vs bottom padding on containers | Dashed spans inside the box with both numbers |
-| Rhythm | Top and bottom padding across page sections, and the content inset in each section | Red span on the section that breaks the pattern, with the expected value |
+| Edge | Left and right edges of stacked siblings | Green line at the shared edge, red line at the odd one, with the offset |
+| Padding | Left vs right padding on containers whose edges are drawn | Dashed spans inside the box with both numbers |
+| Section | Top and bottom padding across page sections, and the content inset in each | Red span on the section that breaks the pattern, with the expected value |
+| Type | `font-size` across every `<h1>`-`<h6>` and `<p>` of the same kind | Red band over the odd one, labelled with its size and the size the rest use |
 
-Everything is measured from the rendered layout at the current viewport, tolerance 2px. Resize and the panel greys out, because every number on screen belongs to the old layout, and a Re-scan button appears to measure the new size.
+Severity is how far off it is: high at 8px or more, medium at 5 to 7, low at 3 to 4. Inside the 2px tolerance nothing is reported. Resize the window and the panel greys out, because every number on screen belongs to the old layout, and a **Re-scan** button takes its place.
 
-### Measuring a state behind a click
+The scan measures the page as it stands, so for a state behind a click - a modal, a menu, an expanded card - open it yourself and press **Re-scan**.
 
-The scan measures the page as it stands. Hand-tuned layout tends to drift in the states you have to
-open: a modal, a menu, an expanded card. Open the state yourself, then press **Re-scan** in the
-panel. It measures what is on screen now, including whatever the click just revealed.
+## What it never flags
 
-### What it deliberately does not flag
+A spacing auditor is only useful if you trust its silence, so these are skipped rather than guessed at. Every row is a rule with a real page behind it.
 
-A spacing auditor is only useful if you trust its silence, so these are skipped rather than guessed at:
+| Shape | Why silence is the right answer |
+|-------|---------------------------------|
+| Siblings that are not the same kind | Comparing a heading against a card tells you nothing. A row or stack is measured only when its children share a tag or a first class. |
+| Runs of text | A paragraph with links in it has uneven gaps by nature. Inline children and mixed text nodes are left alone. |
+| Centered groups | Items centered on their parent are meant to have different edges. |
+| Inline and inline-block elements | A code chip starts wherever the words reach it. 3 chips on 3 lines look like a stack but were never meant to share an edge. |
+| Shadow roots and iframes | The scan walks the main document only. |
+| Type doing a different job | Sizes are compared per tag *and* first class, and only within 25%. A 48px `<p>` beside 16px body copy is a hero line, not a typo. |
+| Type under utility-class CSS | Grouping by first class puts every `class="text-lg ..."` size in its own group, so a Tailwind-style page gets the other 4 checks but little from Type. |
+| Type in another region | Sizes are compared inside the nearest landmark and never across 2. A footer's 16px address line and 20px body copy in `<main>` were never trying to match. |
+| A component that outvotes the page | Type is voted on 1 vote per page strip, not 1 per instance, so a card rendered 6 times cannot outvote 2 real section headings and report *them* as the deviants. A strip that disagrees with itself holds 2 roles rather than an opinion, and casts no vote. |
+| Padding on a box you cannot see | Padding pushes content off centre only when there is an edge on screen to be off centre from. A transparent `padding-left: 22px` with nothing on the right is a grid gutter. A background, a shadow, or borders on both sides makes the box visible and the check applies. |
+| A box edge that is not a visible edge | A negative-margin grid row cancels a gutter its cells carry as padding, so the row hangs 22px left of anything painted in it. When that margin is negative, the edge compared is where its children start painting. |
+| A 2-up row read as a stack | Rows group by a shared top, and 2 columns centred on each other have 2 different tops. Boxes that overlap vertically but not horizontally are beside each other: off by half the container is the width of a column, never of a mistake. |
+| A gap somebody typed | When the excess over the shared gap is exactly an explicit margin on an item that is not the same kind as the row, the space was a decision. Both signals are needed, so 4 cards sharing a class with 1 stray margin still report. |
+| Sections that are not `<section>` elements | The Section check looks for real section tags, so a page built from divs gets the other 4 checks but not that one. |
 
-- **Siblings that are not the same kind.** Comparing a heading against a card tells you nothing, so a row or stack is only measured when its children share a tag or a first class name.
-- **Runs of text.** A paragraph with links in it has uneven gaps by nature. Inline children and mixed text nodes are left alone.
-- **Centered groups.** Items centered on their parent are meant to have different edges.
-- **Inline and inline-block elements.** A code chip inside a sentence starts wherever the words reach it. 3 chips on 3 lines look like a stack of siblings but were never meant to share an edge, so only block-level boxes are compared.
-- **Anything inside a shadow root or an iframe.** The scan walks the main document only.
-- **Sections that are not `<section>` elements.** The vertical rhythm check looks for real section tags, so a page built from divs gets the other 3 checks but not that one.
+## A whole site, not 1 page
+
+```bash
+npm run crawl -- https://example.com --depth 1 --out site-report.md
+```
+
+Scans the start page and everything it links to on the same origin, checks every link it finds including the off-site ones, and writes 1 markdown report: a page-by-page table, the dead links with the page each was found on, and the full findings per page.
+
+| Flag | Default | What it does |
+|------|---------|--------------|
+| `--depth` | `1` | How many hops from the start page to follow. 1 is the start page and its links |
+| `--max` | `25` | Hard cap on pages scanned |
+| `--width` | `1280` | Viewport width to measure at |
+| `--out` | stdout | Write the report to a file instead |
+
+A link checker that calls everything non-200 broken is one nobody reads twice. The first run of this called 15 healthy pages dead because it had asked for them all at once and been rate limited.
+
+| Verdict | Statuses | Why |
+|---------|----------|-----|
+| Dead | 404, 410, no DNS record, connection refused | The page is genuinely gone |
+| Broken | 5xx | The server is failing on it |
+| Unverified | 401, 403, 429, 999, protocol errors | The server declined to answer a crawler. That says nothing about whether the page works, so it is listed separately and never counted as dead |
+
+Same-origin links go through a narrow spaced queue and off-site links go wide, a 429 is retried once after a backoff, and requests carry a real User-Agent so bot filters do not turn every external link into a false alarm. Files are link-checked but never scanned, whether they say so with an extension or only a `Content-Disposition`.
+
+This is a script and not a button because the extension holds `activeTab`. Reading a second page needs `host_permissions` for the whole web, and a spacing tool asking to read every site you visit is a worse trade than running the crawl yourself. The engine is identical: `lib/pure.js` and `overlay.js` injected exactly as `background.js` injects them. It scans undocked, because a site report should describe the layout visitors actually get.
 
 ## The panel
 
-On a window 1200px or wider the panel docks: the page narrows to about 80% and the panel takes the
-strip beside it, so nothing is hidden behind it and the guides are never covered. The page gets its
-width back when you close. Because the scan runs after the dock, the report quotes the width it
-actually measured. Narrower windows keep a floating panel instead, since shrinking them would cross
-a breakpoint and change the layout you were trying to audit.
+On a window 1200px or wider the panel docks: the page narrows to about 80% and the panel takes the strip beside it, so nothing is hidden and no guide is covered. The page gets its width back when you close. The scan runs after the dock, so the report quotes the width it actually measured. Narrower windows keep a floating panel, since shrinking them would cross a breakpoint and change the layout you were auditing. On a phone-sized window it becomes a bottom sheet, and it follows your light or dark theme.
 
+| View | What it is for |
+|------|----------------|
+| Guides (default) | The page untouched, carrying every guide and number |
+| X-ray | The page as a radiograph, no colour at all: the deeper a box is buried the brighter it comes through, and findings burn bone white |
+| Heat | A thermal map of the findings. Green is clear, yellow is an area holding one, red is the measurement that is off. Blurred together so the 3 read as one ramp. No blue, because a page has no colder than normal |
+| Night | Green phosphor and scanlines, lighting nothing but the findings |
+| Ruler (a switch, not a view) | Lays over whichever view is on, or none. Every region, section, container and panel outlined in its own colour and labelled in px, with purple bands showing the gap to each page edge |
 
-- Issues sorted high to low. High is 8px or more off, medium 5 to 7, low 3 to 4. Anything inside the 2px tolerance is not reported at all. The list caps at 150, most severe first, and says so.
-- Click an issue (or Tab to it and press Enter): the page scrolls to it, the element gets a red outline and its guides appear.
-- **4 page views**, one at a time. **Ruler** measures the layout instead of judging it: every region, section, layout container and panel outlined in its own colour, each labelled with its size in px, and purple bands showing the gap to each side of the page. Tick the layers you want. **X-ray** outlines every box, cyan where it sits shallow and violet where it nests deep. **Heat** is a thermal map of the same thing, scaled to the deepest box on the page. **Night** puts the page behind green phosphor with scanlines and lit edges. None of the 4 is a finding, they only show you what is there.
-- **Show all** draws every guide at once. **Copy** puts the markdown below on the clipboard. The refresh icon measures the page again as it looks right now. `Esc` closes and hands focus back where it was.
-- On a phone-sized window the panel becomes a bottom sheet. It follows your light or dark theme.
-- Resize the window and the guides clear, because they described the old layout. A **Re-scan** button takes their place.
+Every lens marks a finding the same way - a spotlight and a numbered target with dashed sightlines crossing it - and only the colour changes. Ruler and X-ray show you what is there; Heat and Night show you the findings all at once instead of one row at a time.
+
+- Every guide is drawn from the moment the panel opens. Clicking a row narrows the page to that 1 finding, and keeps whichever lens you are reading through.
+- The list follows the page. Scroll and the row for the finding you are looking at selects itself and scrolls into view. A row you clicked stays selected until you scroll it off screen.
+- Click a row, or Tab to it and press Enter: the page scrolls to it, the element gets a red outline, its guides appear.
+- Findings are sorted high to low and capped at 150 most severe, and the panel says when it dropped any.
+- The copy icon puts the report on the clipboard and turns green when it lands. The refresh icon measures the page as it looks right now. `Esc` closes and hands focus back where it was.
+- While it scans, a 5 second loop plays: binary rain, a beam sweeping the snake top to bottom, a glowing ring and a bar that fills. The hold is one full turn of it, in `LIMITS.splashMs`.
 
 ## The report
 
@@ -76,95 +128,86 @@ Fix each item below in the source, then re-run Snake Eyes to confirm 0 issues. S
 ## 1. Uneven vertical gaps in <div> "Paragraph 1 Paragraph 2 (28p..." (high)
 - Selector: `section#stack > div > div.stack`
 - Found: 4 stacked blocks, gaps 16, 28, 16px (most are 16px)
+- Why it matters: A stack with one gap out of step reads as 2 groups instead of 1 list. 1 of 3 gaps differ from the 16px the rest share.
 - Expected: 16px between every block
-
-## 2. Section top padding 48px, others use 64px (high)
-- Selector: `section#hero`
-- Found: <section> "Hero Section with 48px top p..." breaks the vertical rhythm shared by 6 other sections
-- Expected: padding-top: 64px
 ```
 
-Paste it to your coding agent as is: every item has a selector, what was found, and what was expected. The report carries the page origin and path only, never the query string or fragment.
+Paste it to your coding agent as is. The report carries the page origin and path only, never the query string or fragment.
 
 ## How it works
 
 ```mermaid
 flowchart LR
     C[Click the icon] --> I[background.js: insert overlay.css, hand over panel.css, run lib/pure.js + overlay.js]
-    I --> S[1 pass over the DOM: rect + computed style per element, then 4 checks]
+    I --> S[1 pass over the DOM: rect + computed style per element, then 5 checks]
     S --> U[Closed shadow root: side panel + a page-sized guide layer]
 ```
-
-| File | Role |
-|------|------|
-| `background.js` | The only thing that runs on install. Listens for the click, injects, and cleans up on toggle-off. |
-| `lib/pure.js` | The math with no DOM: tolerance, severity bands, majority value, outliers, sibling kinds. Unit tested. |
-| `overlay.js` | 4 named stages: `scanPage` reads the page once (capped at 8000 elements), `analyze` judges what it read, `buildReport` writes the markdown, `mount` draws the panel. Each runs on its own, and the tests drive them separately. |
-| `panel.css` | The panel and guides, loaded into the shadow root as a constructed stylesheet. |
-| `overlay.css` | 1 rule for the host element so page CSS cannot hide or re-stack it. |
 
 The overlay adds 1 element to the page, `#snake-eyes-root`, with a closed shadow root inside. Page CSS cannot restyle it, page script cannot reach into it, and it never edits your DOM. Clicking again removes it and the 1 injected rule.
 
 ## Privacy
 
-- Nothing runs until you click. There is no background scanning, no content script on page load.
+- Nothing runs until you click. No background scanning, no content script on page load.
 - Nothing leaves the browser. No network requests, no storage, no analytics.
-- The report you copy contains the page's origin and path, your viewport size, element selectors and short text labels. That is all.
+- The report you copy holds the page's origin and path, your viewport size, element selectors and short text labels. That is all.
 
-## Preview harness
+## Layout and tests
 
-```bash
-npm run dev         # serves the repo on http://localhost:3048
-# open http://localhost:3048/preview/preview.html        (click "Run audit" to toggle)
-# open http://localhost:3048/preview/preview.html?auto=1 (runs on load, for scripts and agents)
 ```
-
-`preview/preview.html` runs the real overlay as an ordinary web page, with no extension
-installed and no Chrome APIs present. It reproduces exactly what the service worker does
-before injection: link `overlay.css`, hand `panel.css` over on `window.__SNAKE_EYES_CSS__`,
-then load `lib/pure.js` and `overlay.js`. Re-injecting `overlay.js` is the toggle, which is
-what the toolbar button does too, so the button here is the same code path.
-
-The page carries deliberate spacing drift, well past the 2px tolerance, so an audit always has
-something to report: a card row with one 31px gap among 24s, a list row nudged 8px right, one
-20px gap among 12s, and two tiles with odd padding. A run that reports 0 issues means something
-broke. This is a fixture, not a design - the uneven spacing is the point.
-
-Use this for quick iteration and for anything driving the overlay from a script. It does not
-replace `npm test`, which also loads the packed extension and covers the manifest, the CSS
-hand-off and the service worker - none of which a plain page can exercise.
-
-## Tests
+background.js   the only thing that runs on install: listens for the click, injects, cleans up on toggle-off
+lib/pure.js     the math with no DOM - tolerance, severity bands, majority, outliers, sibling kinds
+overlay.js      4 stages the tests drive separately: scanPage (1 read, capped at 8000 elements),
+                analyze (judges what it read), buildReport (the markdown), mount (the panel)
+panel.css       the panel and guides, a constructed stylesheet inside the shadow root
+overlay.css     1 rule for the host element so page CSS cannot hide or re-stack it
+scripts/        crawl.mjs (whole-site run), pack, icons, check-version
+preview/        the real overlay as an ordinary web page, no extension installed - npm run dev, then
+                /preview/preview.html (or ?auto=1 for scripts). Deliberate drift, so 0 issues means something broke
+tests/          fixture.html   1 planted mistake per check, beside prose and deep nesting that must stay silent
+                fixture2.html  the branches the first cannot reach: a right edge, vertical padding, a short section
+                clean.html     the control, centered flex groups included: 0 issues
+                verify.mjs     the overlay against those pages at 3 widths, in dark mode, and a 200-issue cap
+                extension.mjs  the packed extension in Chromium: manifest, CSS hand-off, toggle, Escape cleanup
+                crawl.mjs      the whole-site run against a local fixture site
+```
 
 ```bash
 npm install
 npx playwright install chromium   # once
-npm test            # unit tests, the overlay against 3 pages, then the real extension loaded in Chromium
-npm run lint        # eslint, zero warnings
+npm test                # unit, the overlay against 3 pages, then the real extension in Chromium
+npm run lint            # eslint, zero warnings
 npm run check:version   # manifest.json and package.json must agree
-npm run pack        # zip just the files Chrome needs, for a release or a store upload
-npm run icons       # regenerate the icon PNGs
-npm run hero        # refresh docs/hero.png from the fixture
+npm run pack            # zip just the files Chrome needs
+npm run icons           # regenerate the icon PNGs
+npm run hero            # refresh docs/hero.png from the fixture
 ```
 
-`tests/fixture.html` plants exactly 1 mistake per check (6 in all) next to prose with inline links and deep nesting that must not be flagged. `tests/fixture2.html` covers the branches the first one cannot reach: a right edge, top against bottom padding, and a section that ends early. `tests/clean.html` is the control, including centered flex groups that must stay silent. The browser test asserts exactly those 6 come back, that every selector resolves to its element, that the panel works by mouse and keyboard, that every header control stays inside the panel and clickable at 3 widths and in dark mode, that a resize greys the panel out, that `tests/clean.html` yields 0 issues, and that a 200-issue page is capped at 150 most severe first. The fixture also runs at 390px and 768px. A third suite loads the unpacked extension in Chromium and drives the service worker itself, so the manifest, the CSS hand-off, the toggle and the Escape cleanup are covered by something other than a hand-rolled injection. CI runs all of it on every push to main and every pull request, on Node 22 with SHA-pinned actions. A `v*` tag runs the suite again and attaches a zip of the extension to the GitHub release.
+CI runs all of it on every push to main and every pull request, on Node 22 with SHA-pinned actions. A `v*` tag runs the suite again and attaches a zip of the extension to the GitHub release.
 
 ## Decisions
 
 | Decision | Why |
 |----------|-----|
 | Measure the rendered layout, not the CSS | What the eye sees is the bounding box. A 24px gap made of margin plus padding is still a 24px gap. |
-| A real majority, or silence | The expected value has to be one most siblings actually share. 3 buttons at their natural widths agree on nothing, so nothing is reported. Guessing a middle value there would invent a rule the designer never wrote. |
+| A real majority, or silence | The expected value has to be one most siblings actually share. 3 buttons at their natural widths agree on nothing, so nothing is reported. Guessing a middle value would invent a rule the designer never wrote. |
+| 1 vote per page strip | A component rendered 6 times is 1 decision, not 6 votes. Counting instances let a card outvote the headings it should answer to. |
+| Only measure edges you can see | A box edge nothing paints is not an edge. This is what killed a whole class of false findings on negative-margin grids. |
 | 2px tolerance | Subpixel rounding and borders create 1px noise. 3px is where a human starts to notice. |
 | Report first, pictures second | The clipboard report is the product. Guides exist so you can trust the report before pasting it. |
 | No background scanning | It only runs when clicked. A spacing audit on every page load would be noise and a privacy problem. |
-| Prose is not a layout | A paragraph with links has uneven "gaps" by nature. Text runs and centered stacks are skipped, not reported. |
-| Cap after sort | When a page has more than 150 issues, the 150 kept are the worst ones, and the report says how many were left. |
+| Cap after sort | Past 150 findings the ones kept are the worst, and the report says how many were left. |
 
-## Author
+---
 
-Bunlong Heng, Senior Full-Stack Developer & Architect. [bunlongheng.com](https://bunlongheng.com) | [GitHub](https://github.com/bunlongheng) | [LinkedIn](https://www.linkedin.com/in/bunlongheng)
+<div align="center">
 
-## License
+<a href="https://bunlongheng.com"><img src="https://img.shields.io/badge/bunlongheng.com-3A3A3C?style=for-the-badge&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWAQMAAAD+ev54AAAABlBMVEVMaXH///+a4ocPAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAD6AAAA+gBtXtSawAAAC1JREFUCNdjYEADzP+A+D8INzAwvwfi4w0QNlCMcX8DAyOQzfgcKgcVB+lBAwANvRHlhhcQugAAAABJRU5ErkJggg==" alt="bunlongheng.com"></a>
+<a href="https://www.linkedin.com/in/bunlongheng/"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a>
+<a href="https://www.instagram.com/ibunlong/"><img src="https://img.shields.io/badge/Instagram-C13584?style=for-the-badge&logo=instagram&logoColor=white" alt="Instagram"></a>
+<a href="mailto:bheng.code@gmail.com"><img src="https://img.shields.io/badge/Email-2E7D32?style=for-the-badge&logo=gmail&logoColor=white" alt="Email"></a>
 
-MIT. See [LICENSE](LICENSE).
+<br>
+
+Built by **[Bunlong](https://bunlongheng.com)** &nbsp;&middot;&nbsp; [more apps](https://bunlongheng.com/projects)
+
+</div>
