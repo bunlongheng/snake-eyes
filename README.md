@@ -46,24 +46,24 @@ The scan measures the page as it stands, so for a state behind a click - a modal
 
 ## What it never flags
 
-A spacing auditor is only useful if you trust its silence, so these are skipped rather than guessed at. Every row is a rule with a real page behind it.
+Silence is only useful if you trust it. Every row is a rule with a real page behind it.
 
-| Shape | Why silence is the right answer |
-|-------|---------------------------------|
-| Siblings that are not the same kind | Comparing a heading against a card tells you nothing. A row or stack is measured only when its children share a tag or a first class. |
-| Runs of text | A paragraph with links in it has uneven gaps by nature. Inline children and mixed text nodes are left alone. |
-| Centered groups | Items centered on their parent are meant to have different edges. |
-| Inline and inline-block elements | A code chip starts wherever the words reach it. 3 chips on 3 lines look like a stack but were never meant to share an edge. |
+| Shape | Why silence is right |
+|-------|----------------------|
+| Siblings of different kinds | A heading against a card compares nothing. Same tag or first class, or no measurement. |
+| Runs of text | A paragraph with links in it has uneven gaps by nature. |
+| Centered groups | Items centered on a parent are meant to have different edges. |
+| Inline and inline-block | A code chip starts where the words reach it, not on a shared edge. |
 | Shadow roots and iframes | The scan walks the main document only. |
-| Type doing a different job | Sizes are compared per tag *and* first class, and only within 25%. A 48px `<p>` beside 16px body copy is a hero line, not a typo. |
-| Type under utility-class CSS | Grouping by first class puts every `class="text-lg ..."` size in its own group, so a Tailwind-style page gets the other 4 checks but little from Type. |
-| Type in another region | Sizes are compared inside the nearest landmark and never across 2. A footer's 16px address line and 20px body copy in `<main>` were never trying to match. |
-| A component that outvotes the page | Type is voted on 1 vote per page strip, not 1 per instance, so a card rendered 6 times cannot outvote 2 real section headings and report *them* as the deviants. A strip that disagrees with itself holds 2 roles rather than an opinion, and casts no vote. |
-| Padding on a box you cannot see | Padding pushes content off centre only when there is an edge on screen to be off centre from. A transparent `padding-left: 22px` with nothing on the right is a grid gutter. A background, a shadow, or borders on both sides makes the box visible and the check applies. |
-| A box edge that is not a visible edge | A negative-margin grid row cancels a gutter its cells carry as padding, so the row hangs 22px left of anything painted in it. When that margin is negative, the edge compared is where its children start painting. |
-| A 2-up row read as a stack | Rows group by a shared top, and 2 columns centred on each other have 2 different tops. Boxes that overlap vertically but not horizontally are beside each other: off by half the container is the width of a column, never of a mistake. |
-| A gap somebody typed | When the excess over the shared gap is exactly an explicit margin on an item that is not the same kind as the row, the space was a decision. Both signals are needed, so 4 cards sharing a class with 1 stray margin still report. |
-| Sections that are not `<section>` elements | The Section check looks for real section tags, so a page built from divs gets the other 4 checks but not that one. |
+| Type doing another job | Per tag and first class, within 25%. A 48px `<p>` is a hero line, not a typo. |
+| Type under utility classes | `class="text-lg ..."` groups every size alone, so Tailwind pages get little from Type. |
+| Type in another region | Judged inside the nearest landmark. Footer microcopy is not body copy. |
+| A component outvoting the page | 1 vote per page strip, so 6 cards cannot outvote 2 section headings. |
+| Padding on an invisible box | No drawn edge, nothing to be off centre from. A 1-sided `padding-left` is a gutter. |
+| A box edge nothing paints | A negative-margin row hangs left of its own content, so the edge is where its children paint. |
+| A 2-up row read as a stack | Centred columns have different tops. Overlapping vertically but not horizontally means beside. |
+| A gap somebody typed | Excess equal to a margin on a different-kind item was a decision, not a slip. |
+| Non-`<section>` sections | The Section check needs real section tags. |
 
 ## A whole site, not 1 page
 
@@ -136,12 +136,12 @@ Paste it to your coding agent as is. The report carries the page origin and path
 
 ## How it works
 
-```mermaid
-flowchart LR
-    C[Click the icon] --> I[background.js: insert overlay.css, hand over panel.css, run lib/pure.js + overlay.js]
-    I --> S[1 pass over the DOM: rect + computed style per element, then 5 checks]
-    S --> U[Closed shadow root: side panel + a page-sized guide layer]
-```
+| Diagram | What it shows |
+|---------|---------------|
+| [Architecture](https://flows-bheng.vercel.app/?id=68d4e219-832e-4ad3-b801-6494b1089e3a) | The pieces: toolbar, service worker, the 1 tab, the engine, the report, and the crawl reusing it |
+| [Click to report](https://sequences-bheng.vercel.app/d/934d6cbc-86d6-4650-9934-78683b094f6c) | Every step from the click to the clipboard, and the teardown on the next click |
+
+[![Click to report](https://sequences-bheng.vercel.app/svg/934d6cbc-86d6-4650-9934-78683b094f6c)](https://sequences-bheng.vercel.app/d/934d6cbc-86d6-4650-9934-78683b094f6c)
 
 The overlay adds 1 element to the page, `#snake-eyes-root`, with a closed shadow root inside. Page CSS cannot restyle it, page script cannot reach into it, and it never edits your DOM. Clicking again removes it and the 1 injected rule.
 
