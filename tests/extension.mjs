@@ -45,6 +45,10 @@ const userDataDir = await mkdtemp(join(tmpdir(), "snk-"));
 // channel "chromium" selects the new headless mode, the only one that runs MV3 service workers.
 const context = await chromium.launchPersistentContext(userDataDir, {
   channel: "chromium",
+  // The real extension runs here, so the splash is the real 5s loop. Asking for reduced motion
+  // takes the short hold, which is the behaviour a reduced-motion reader gets anyway, and keeps
+  // this file from spending 17s watching an animation it is not testing.
+  reducedMotion: "reduce",
   args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`],
 });
 

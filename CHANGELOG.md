@@ -2,6 +2,117 @@
 
 ## Unreleased
 
+- 3 checks were reporting things nobody should change, and a report you have to audit is worse than
+  no report. On kactusbio.com the engine found 6 issues and 5 of them were false: it now finds the
+  1 that was real. Each rule below asks for a reason the finding could be real before it fires.
+- **Padding only on a box whose edges are drawn.** Padding pushes content off centre only when
+  there is an edge on screen to be off centre from. A transparent div with `padding-left: 22px` and
+  nothing on the right is indistinguishable from a margin - and that is what a grid framework's
+  gutters look like: a Shopify `.grid__item` carries the column gutter as padding on 1 side, on
+  every item of every grid. A background, a shadow, or a border on both sides makes the box
+  visible; a border on 1 side is a divider rule, and the padding beside it is the gap from the rule.
+- **Type compared inside its own region.** "The other `<p>` on this page" is not 1 population. A
+  footer's 16px address line and the 20px body copy in `<main>` are both unclassed `<p>` and were
+  never trying to match, and comparing them told the footer to use a size nobody typed. Sizes are
+  now grouped by the nearest landmark as well as by tag and first class.
+- **A gap explained by a margin somebody typed.** When the excess over the shared gap is exactly an
+  explicit margin on one of the 2 items beside it, and that item is not the same kind as the rest of
+  the row, the space was a decision - a footer holding its logo away from its menus with
+  `margin-right: 35px` on top of a 20px flex gap. Both signals are needed, so 4 cards that share a
+  class and differ by a stray margin still report, and so does a margin that is the row's gap rule
+  rather than an addition to it.
+- **A 2-up row is not a stack.** Rows are grouped by a shared top, so 2 columns centred on each
+  other have 2 different tops and arrived at the edge check as 2 rows of 1 item. Each column was
+  then reported for not sharing the other's edge, off by exactly half the container. 2 boxes that
+  overlap vertically but not horizontally are beside each other, and their edges are not compared.
+- **Edges are measured where a box paints, not where its box hangs.** A negative-margin grid row
+  cancels a gutter its cells carry as padding, so the row sits 22px left of anything painted in it
+  and read as 22px out of line with every section above it while its text landed in the same place.
+  When the margin on that side is negative, the edge is where its children start painting.
+- **1 vote per page strip in the type check, not 1 per instance.** A component rendered 6 times is
+  1 decision: on the company page 6 card titles at 50px outvoted 2 genuine section headings and
+  reported THEM as the deviants, which is the report asking you to break the page to match a card.
+  Sizes are now voted on by strip - the band of page a sample lives in - and a strip whose own
+  samples disagree holds 2 roles rather than an opinion, so it casts no vote at all. Inside 1 strip
+  the instances still answer to each other, because 6 cards whose titles disagree is the defect
+  this check is for.
+- Measured end to end on 3 pages of a real Shopify theme: the homepage went 5 findings to 0, the
+  SAMS page 4 to 0, the company page 16 to 0, and bunlongheng.com kept all 3 of its real findings.
+- All 6 shapes are in the test suite next to the defect of the same kind that must still fire, so
+  the silence is asserted and not assumed.
+
+- Every lens marks a finding the same way: a light pool, a dashed crosshair through it, a target
+  box, the numbered tag, and the guides carrying the numbers. 1 pass of geometry, so a finding sits
+  in the same place wherever you are looking; only the colour changes, and it comes from the class
+  the layer wears. Night is white, Heat is red, X-ray is bone.
+- X-ray is a radiograph. Depth was hue, cyan to violet, which is a legend to memorise; it is now
+  exposure, with no colour on the page at all. The deeper a box is buried the brighter it comes
+  through, and the findings burn bone white.
+- The sightlines were black in every lens. `border-top: 1px dashed` is a shorthand and it resets
+  border-color to currentColor, so the colour each lens set was overwritten a line later. Widths
+  are longhands now.
+- With no lens on, the page is untouched and carries the guides and boxes, as before. A lens only
+  changes how that is painted.
+
+- Clicking a row keeps the lens. It dropped you back to the plain view to jump to a finding, so
+  following one up while reading the page through Heat, Night or X-ray cost you the view that made
+  you want to follow it up. The guides for the row you clicked now draw over whichever lens is on.
+
+- The list follows the page. On a long page, scrolling to something you can see is wrong meant
+  hunting the panel for which of 40 rows describes it. The row for the finding nearest the middle
+  of the window now selects itself and scrolls into view, from the moment the panel opens, since
+  you may have opened it halfway down. A row you clicked stays selected until it scrolls off
+  screen, and only then does the page go back to drawing every finding.
+- Night lights nothing but the findings. It outlined every box on the page, then every box over
+  56px, and both drew a grid over every logo strip and nav row dense enough to hide the targets.
+  A box that is not a finding is the thing the view is trying not to draw your eye to.
+- Night lost its red. Red is the panel's colour for wrong, and on a green phosphor field it read
+  as another tool's output leaking through. The same guides carrying the same numbers come out
+  white there, with a spotlight and dashed sightlines crossing on each finding.
+- Night's root is coloured, not just its body. The filter can only go on body, so the strips of
+  html background beside a centred page came through white, and washing them dark from the guide
+  layer washed the content with them until the page could not be read.
+
+- The splash is a scanning animation rather than a logo that breathes: binary rain behind, browser
+  panes drifting at the edges, a beam sweeping the snake top to bottom, a glowing floor ring and a
+  bar that fills. 1 loop, 5s, every keyframe on the same clock so they come back round together.
+  The hold is set to a full turn, so a click plays the whole loop instead of cutting off mid sweep.
+  It is 1 constant, LIMITS.splashMs, and the keyframes in panel.css must match it.
+
+- The selected row carries its own severity instead of a green highlight. Green in this tool means
+  the value the siblings agree on, so outlining a finding in it said the opposite of what it meant.
+  A high row is now outlined red, a medium one amber, the same colour its tag already carried.
+- Ruler labels carry their unit. A bare `177` beside a `1524 x 186` reads as a third dimension
+  rather than a gap measured in px.
+
+- Ruler is a switch instead of a 4th view. Measuring the layout is a question you can ask of any
+  view, so making it exclusive with the other 3 meant you could never read a size while looking at
+  where the findings are. It now lays over whichever mode is on, or over none. Every painter used
+  to call clearGuides() for itself, which is exactly why 2 could never be on at once; they now
+  append, and 1 render() composes the mode, the switch and the guides of a selected finding.
+- Show all is gone. Every guide is drawn from the moment the panel opens, which is what the button
+  did, and clicking a row narrows to that one finding. A button that says "yes, all of them" is
+  answering a question nobody asked.
+- Copy is an icon in the header where Collapse used to be, and turns green when the report lands.
+  Collapse folded a panel that already has a close button beside it.
+
+- Heat is a thermal map of the findings. It used to shade every box by nesting depth, which is the
+  same thing X-ray already outlines, so the view cost a button and told you nothing the view beside
+  it did not. It now reads the way any heat map reads: green is clear, yellow is an area holding a
+  finding, red is the measurement inside it that is actually off. The blobs share one blurred
+  parent, so the 3 colours smear into a ramp instead of stacking as rectangles. No blue, because a
+  page has no such thing as colder than normal.
+- Night vision locks on. It lit every box on the page equally, which is the same as lighting none:
+  the view looked good and left you with no idea where to start. The boxes are now faint terrain,
+  every finding gets a numbered target matching its row in the list, and the measurement that is
+  off burns white. Its tint also sat at 0.85 brightness, which turned a white page pale green
+  rather than dark, so the lit targets had nothing to stand out against.
+- The issue rows line up. The type tag sat in its own grid column beside the title, which left the
+  title a ~200px gutter to wrap in: a long finding broke over 4 lines and every row ended a
+  different shape. The number and tag now share one line and the title takes the full width.
+- The panel's scrollbar follows the panel's theme. Left to the browser it inherited the page's,
+  so a dark panel on a light site had a white bar down its side.
+
 - X-ray works. It never did: overlay.js created .snk-xbox nodes and panel.css had no rule for
   them at all, so 1200 divs went onto the page carrying an inline border-colour with no position
   and no border-width, which paints nothing. Every view now has a test that its boxes are visible,

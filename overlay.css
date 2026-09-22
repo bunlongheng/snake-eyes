@@ -15,6 +15,17 @@ html.snk-docked > body { transform: translateZ(0) !important; width: 100% !impor
 /* Night vision tints the page itself. The filter goes on body, never on html: the overlay root is
    a child of html, so filtering html would tint our own panel along with the site. It is only a
    filter, so nothing in the document changes and removing the class puts every colour back. */
-html.snk-nv > body { filter: grayscale(1) sepia(1) hue-rotate(55deg) saturate(4.5) brightness(0.85) contrast(1.15) !important; }
+/* brightness sits low on purpose. At 0.85 a white page came through as pale green, which is a
+   green page and not a dark one, and the lit targets had nothing to stand out against. */
+/* The root goes dark too. The filter can only go on body, so the strips of html background beside
+   a centred page came through white, and washing them dark from our own layer meant washing the
+   content with them until it could not be read. Colouring the root fixes the surround at its
+   source and leaves the filter free to keep the page legible. */
+html.snk-nv { background-color: #010a04 !important; }
+/* X-ray strips the page to a radiograph. Same rule as night: the filter can only go on body, so
+   the root is coloured too or the strips of html background beside a centred page stay white. */
+html.snk-xr { background-color: #000000 !important; }
+html.snk-xr > body { filter: grayscale(1) brightness(0.62) contrast(1.2) !important; }
+html.snk-nv > body { filter: grayscale(1) sepia(1) hue-rotate(58deg) saturate(6.5) brightness(0.42) contrast(1.5) !important; }
 
 #snake-eyes-root { all: initial !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: 2147483646 !important; display: block !important; }

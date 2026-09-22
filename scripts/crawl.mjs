@@ -24,6 +24,7 @@ if (!start) {
   process.exit(2);
 }
 const DEPTH = Number(flag("depth", 1));
+const LINKS_ONLY = argv.includes("--links-only"); // dead links need the hrefs, never the layout
 const MAX = Number(flag("max", 25));
 const WIDTH = Number(flag("width", 1280));
 const OUT = flag("out", null);
@@ -71,15 +72,34 @@ const verdictOf = (status, error) => {
 
 // HEAD first because it costs no body. Plenty of servers answer HEAD with 405 or 501 while serving
 // the page fine, so those fall back to GET rather than being called broken.
+// Shopify rate limits HEAD hard: a first run against kactusbio.com came back 285 of 434 links at
+// 429, which reads as "we could not check 2 thirds of your site" and is entirely self-inflicted.
+// One retry was not enough. The pacer widens the gap between same-origin requests every time a 429
+// lands and narrows it again on a clean streak, so a run settles at whatever the host will take
+// instead of a number guessed up front.
+const pace = { gap: 120, min: 120, max: 4000, ok: 0 };
+const slower = () => { pace.gap = Math.min(pace.max, Math.round(pace.gap * 2)); pace.ok = 0; };
+const faster = () => { if (++pace.ok >= 20 && pace.gap > pace.min) { pace.gap = Math.max(pace.min, Math.round(pace.gap / 2)); pace.ok = 0; } };
+
 const linkCache = new Map();
 const checkLink = async (url, attempt = 0) => {
   if (linkCache.has(url)) return linkCache.get(url);
+  const mine = url.startsWith(origin);
   let out;
   try {
     let res = await ctx.request.head(url, { timeout: 15000, maxRedirects: 5 });
     if (res.status() === 405 || res.status() === 501) res = await ctx.request.get(url, { timeout: 20000, maxRedirects: 5 });
-    // 429 means we asked too fast, not that the page is gone. Back off once and take the 2nd answer.
-    if (res.status() === 429 && attempt === 0) { await sleep(2000); linkCache.delete(url); return checkLink(url, 1); }
+    // 429 means we asked too fast, not that the page is gone. Honour Retry-After when the server
+    // sends one, otherwise back off exponentially, and keep trying: an unverified link is a hole
+    // in the report, so it is worth waiting for an answer rather than shipping a shrug.
+    if (res.status() === 429 && attempt < 4) {
+      if (mine) slower();
+      const after = Number(res.headers()["retry-after"]);
+      await sleep(Number.isFinite(after) && after > 0 ? Math.min(after * 1000, 30000) : 1000 * 2 ** attempt);
+      linkCache.delete(url);
+      return checkLink(url, attempt + 1);
+    }
+    if (mine && res.status() !== 429) faster();
     out = { status: res.status(), modified: res.headers()["last-modified"] || "" };
   } catch (e) {
     const raw = String(e.message || e).split("\n")[0];
@@ -98,12 +118,38 @@ const linksOn = new Map(); // url -> the page it was first found on
 const queue = [{ url: canon(start), depth: 0 }];
 const seen = new Set([canon(start)]);
 
+const collect = (hrefs, from, depth) => {
+  for (const h of hrefs) {
+    const abs = canon(h);
+    if (!abs) continue;
+    if (!linksOn.has(abs)) linksOn.set(abs, from);
+    if (abs.startsWith(origin) && depth < DEPTH && !seen.has(abs) && !looksLikeFile(abs)) { seen.add(abs); queue.push({ url: abs, depth: depth + 1 }); }
+  }
+};
+
+const started = Date.now();
+let pageStart = 0;
+const ms = () => `${((Date.now() - pageStart) / 1000).toFixed(1)}s`;
 while (queue.length && pages.length < MAX) {
   const { url, depth } = queue.shift();
-  process.stderr.write(`scanning ${url} ... `);
+  pageStart = Date.now();
+  process.stderr.write(`${LINKS_ONLY ? "reading" : "scanning"} ${url} ... `);
   const page = await ctx.newPage();
   try {
-    const res = await page.goto(url, { waitUntil: "networkidle", timeout: 45000 });
+    // networkidle waits for 500ms of network silence, which a site with analytics, chat widgets or
+    // any polling never reaches, so it burns the full timeout on every page: measured on
+    // kactusbio.com it is 17.2s a page against 0.6s for domcontentloaded and 8.1s for load. What
+    // the scan actually needs is layout, not silence, so wait for the DOM and then settle fonts
+    // and in-view images with a hard ceiling on the wait.
+    const res = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+    await page.evaluate(() => Promise.race([
+      Promise.all([
+        document.fonts ? document.fonts.ready : 0,
+        ...[...document.images].filter((i) => !i.complete && i.getBoundingClientRect().top < innerHeight * 2)
+          .slice(0, 30).map((i) => i.decode().catch(() => 0)),
+      ]),
+      new Promise((r) => setTimeout(r, 2500)),
+    ])).catch(() => {});
     // A 404 page renders, so it would scan happily and report spacing issues on an error page.
     // It is already named in the dead links table; measuring it twice helps nobody.
     if (res && !res.ok()) {
@@ -113,6 +159,13 @@ while (queue.length && pages.length < MAX) {
       continue;
     }
     const hrefs = await page.$$eval("a[href]", (as) => as.map((a) => a.getAttribute("href") || ""));
+    if (LINKS_ONLY) {
+      pages.push({ url, depth, issues: [], total: 0, report: "", error: "links only" });
+      collect(hrefs, url, depth);
+      process.stderr.write(`${hrefs.length} links, ${ms()}\n`);
+      await page.close();
+      continue;
+    }
     await page.addStyleTag({ content: overlayCss });
     await page.evaluate((c) => { window.__SNAKE_EYES_CSS__ = c; window.__snakeEyesTest = true; window.__snakeEyesNoDock = true; }, panelCss);
     await page.addScriptTag({ content: pure });
@@ -120,13 +173,8 @@ while (queue.length && pages.length < MAX) {
     await page.waitForFunction(() => window.__snakeEyes && window.__snakeEyes.ready, null, { timeout: 30000 });
     const got = await page.evaluate(() => ({ issues: window.__snakeEyes.issues, total: window.__snakeEyes.total, report: window.__snakeEyes.report() }));
     pages.push({ url, depth, ...got });
-    for (const h of hrefs) {
-      const abs = canon(h);
-      if (!abs) continue;
-      if (!linksOn.has(abs)) linksOn.set(abs, url);
-      if (abs.startsWith(origin) && depth < DEPTH && !seen.has(abs) && !looksLikeFile(abs)) { seen.add(abs); queue.push({ url: abs, depth: depth + 1 }); }
-    }
-    process.stderr.write(`${got.total} issues, ${hrefs.length} links\n`);
+    collect(hrefs, url, depth);
+    process.stderr.write(`${got.total} issues, ${hrefs.length} links, ${ms()}\n`);
   } catch (e) {
     const msg = String(e.message || e).split("\n")[0];
     // A URL that serves a download is a file, not a page that failed to render.
@@ -143,22 +191,26 @@ process.stderr.write(`checking ${linksOn.size} links ... `);
 const status = new Map();
 // The site's own links go through a narrow, spaced queue and everyone else's go wide. Hammering
 // your own origin with 8 parallel HEADs is what produced the 429s in the first place.
+let done = 0;
 const drain = async (list, pool, spacing) => {
   const q = [...list];
   await Promise.all(Array.from({ length: pool }, async () => {
     for (let u = q.shift(); u !== undefined; u = q.shift()) {
       status.set(u, await checkLink(u));
-      if (spacing) await sleep(spacing);
+      if (spacing === -1) await sleep(pace.gap);
+      else if (spacing) await sleep(spacing);
+      if (done++ % 50 === 0) process.stderr.write(`${done}/${linksOn.size} `);
     }
   }));
 };
 const own = [...linksOn.keys()].filter((u) => u.startsWith(origin));
 const ext = [...linksOn.keys()].filter((u) => !u.startsWith(origin));
-await drain(own, 2, 150);
+await drain(own, 1, -1); // -1: use the adaptive pacer rather than a fixed gap
 await drain(ext, 8, 0);
 const dead = [...status.entries()].filter(([, v]) => v.verdict === "dead" || v.verdict === "broken");
 const unverified = [...status.entries()].filter(([, v]) => v.verdict === "unverified");
 process.stderr.write(`${dead.length} dead or broken, ${unverified.length} unverified\n`);
+process.stderr.write(`done in ${((Date.now() - started) / 1000).toFixed(1)}s\n`);
 
 const counts = { high: 0, medium: 0, low: 0 };
 for (const p of pages) for (const i of p.issues) counts[i.severity]++;
