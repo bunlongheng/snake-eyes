@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- **The panel says what just happened.** A green toast at the foot of the panel when a scan
+  lands ("Scanned at 1440px: 5 issues") and when the report is copied, red when the copy fails;
+  the Copy icon pops and the Re-scan icon spins before the panel drops. The only sign of a copy
+  used to be the 26px icon changing shade.
+- **The near miss across classes.** The Type rule groups by tag, class and region, which is why it
+  stayed quiet on kactusbio.com while a 50px "From the blog" sat among 45px section titles and
+  30px event cards among 25px cards: each had a class of its own. A size within 20% of its tag's
+  norm was meant to match it and is now reported; a size further off is a role (16px footer labels
+  set in `<h2>` for the outline) and is listed in the info line instead. The norm is voted 1 vote
+  per strip, header, nav and footer are left out, and 3 of a class at 1 size is a style.
+- **Corners.** A new check reads `border-radius` on every drawn box 28px or taller: a background, a
+  shadow, a border, a picture, or a rounded clip. Siblings of a kind that disagree are a defect (1
+  of 4 tiles at 12px among 8px), and the tally per kind of box across the page is 1 row with the
+  norm as the suggestion: "Boxes use 4 corner radii: 20px on 14, 8px on 11, 15px on 5, 30px on 2"
+  on kactusbio.com, with "border-radius: 20px on every box, or a scale of 2 steps". A radius within
+  5px of the norm is medium, since it was meant to be the norm; the rest is low. Round, square and
+  corners that differ inside 1 box are shapes and are compared among siblings only. The info line
+  carries the corner scale beside the type scale.
+- **An info line for the type scale.** The panel footer and the report carry "Type scale: <h2>
+  45px (56, 25px as other roles), <p> 20px", and when body copy sits at 19px or more, what 16px
+  would save. That is an opinion, so it is never counted as an issue.
+- **An image framed unevenly.** Top vs side padding is still never compared on text, where the
+  asymmetry is a decision. An image is different: it draws a hard edge on the 3 sides it touches, so
+  a card padded 26px over the picture and 42px beside it shows a frame that is thinner on top. On
+  kactusbio.com all 4 event cards did this and the engine reported 0, because the sibling rule saw
+  4 cards agreeing. The new rule fires only when the image fills the content width and sits at the
+  top of a drawn box, and cards alike fold into 1 row.
 - 3 checks were reporting things nobody should change, and a report you have to audit is worse than
   no report. On kactusbio.com the engine found 6 issues and 5 of them were false: it now finds the
   1 that was real. Each rule below asks for a reason the finding could be real before it fires.

@@ -424,10 +424,14 @@ const other = await context.newPage();
 await other.goto("file://" + join(here, "fixture2.html"));
 const o = await inject(other);
 const otext = o.issues.map((i) => `${i.title} | ${i.detail}`).join("\n");
-check(o.issues.length === 3, `fixture2: exactly the 3 planted issues (found ${o.issues.length})`);
+check(o.issues.length === 6, `fixture2: exactly the 6 planted issues (found ${o.issues.length}${o.issues.length !== 6 ? ": " + o.issues.map((i) => i.title).join(" | ") : ""})`);
 check(/Right edge off by 6px/.test(otext), "right edge: the item that stops 6px short");
 check(/left 44px vs right 20px/.test(otext), "padding: uneven sides on a box no sibling matches");
 check(/Section bottom padding 24px, others use 56px/.test(otext), "section: the section that ends early");
+check(/Image framed unevenly in <div> "Thin on top[^|]*\| top 26px vs sides 42px, on 2 siblings alike/.test(otext), "padding: the image framed thinner on top, 2 cards folded into 1 row");
+check(/Corners differ on 4 <div> in <div> \| 8px on 3, 12px on 1/.test(otext), "corners: the tile rounded 12px among 3 at 8px");
+check(/Boxes use 2 corner radii: 8px on 3, 10px on 2 \| 3 of the 5 boxes, in 1 of the 1 blocks, round their corners 8px; a radius within 5px of that was meant to be it/.test(otext), "corners: the 10px notes against the 8px the tiles agree on, the 12px tile not counted twice");
+check(/Corners: boxes 8px \(also 10px\)\./.test(o.report), "corners: the info line names the norm and the stray");
 await other.close();
 
 // ---------- every page view actually paints ----------
@@ -471,7 +475,11 @@ await type.setContent(`<!doctype html><meta charset=utf-8><style>
 <p class=hero>Hi.</p><p class=lede>Senior Full-Stack Developer</p>
 ${Array.from({ length: 5 }, (_, i) => `<div class=card><h2 class=card-h>Card ${i + 1}</h2><p class=card-b>body copy ${i + 1}</p></div>`).join("")}`);
 const ty = await inject(type);
-const tset = ty.issues.filter((i) => i.type === "type");
+const scaleRow = (i) => /^\d+ <\w+> sits? at /.test(i.title);
+const tset = ty.issues.filter((i) => i.type === "type" && !scaleRow(i));
+const tscale = ty.issues.filter(scaleRow).map((i) => `${i.title} | ${i.detail}`).join(" / ");
+check(!tscale, `type: a hero and a lede far off 16px are roles, not near misses (${tscale || "none"})`);
+check(/- Type scale: <p> 16px \(48, 24px as other roles\), <h2> 24px/.test(ty.report), `type: the report carries the scale as an info line (${(ty.report.match(/- Type scale.*/) || ["none"])[0]})`);
 check(tset.length === 2, `type: exactly the 2 near misses (found ${tset.length}: ${tset.map((i) => i.title).join(" | ")})`);
 check(tset.some((i) => /<h2> "Card 2" is 22px/.test(i.title)), "type: the 22px heading among 24px ones");
 check(tset.some((i) => /<p> "body copy 4" is 14px/.test(i.title)), "type: the 14px body copy among 16px ones");
@@ -525,7 +533,10 @@ await fp.setContent(`<!doctype html><meta charset=utf-8><style>
   <h2>Heading A</h2><h2>Heading B</h2><h2 id=small>Partners heading</h2></main>
 <footer><p>footer address line</p></footer>`);
 const f = await inject(fp);
-const only = (t) => f.issues.filter((i) => i.type === t);
+const only = (t) => f.issues.filter((i) => i.type === t && !scaleRow(i));
+const scaleRows = f.issues.filter(scaleRow).map((i) => `${i.title} | ${i.detail}`).join(" / ");
+check(!scaleRows, `type: 6 cards cannot make 2 headings near misses, and the footer line is not body copy (${scaleRows || "none"})`);
+check(/Body copy 20px on 3 of 3 <p>; 16px would be 20% smaller/.test(f.report), `type: 20px body copy is an info line, not an issue (${(f.report.match(/Body copy.*/) || ["none"])[0]})`);
 const names = (t) => only(t).map((i) => `${i.title} | ${i.detail}`).join(" / ") || "none";
 check(only("gaps").length === 1 && /cellB/.test(names("gaps")),
   `gap: the authored 35px margin is quiet and the stray one fires (${names("gaps")})`);

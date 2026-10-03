@@ -340,6 +340,56 @@
       guides: [band(r.left, r.top, pl, r.height, `${pl}px`, pl > pr), band(r.right - pr, r.top, pr, r.height, `${pr}px`, pr > pl)] });
   }
 
+  // 3b: a picture framed unevenly. The rule above stays silent on top vs side padding because on
+  // text that asymmetry is a decision. An image is different: it draws a hard edge on all 3 sides
+  // it touches, so a card padded 26px over it and 42px beside it shows a frame that is thinner on
+  // top, and no sibling agreement makes that even (on kactusbio.com all 4 event cards shared it,
+  // which is why the sibling escape hatch above does not apply here). It fires only when the image
+  // fills the content width and sits at the top of the box: then the 3 insets are the padding and
+  // nothing else, and a picky designer expects 1 number.
+  const MEDIA = new Set(["IMG", "PICTURE", "VIDEO", "CANVAS"]);
+  const topMedia = (box) => {
+    let cur = box;
+    for (let depth = 0; depth < LIMITS.contentDepth; depth++) {
+      const kid = kidsOf(cur)[0];
+      if (!kid) return null;
+      if (MEDIA.has(kid.tagName)) return kid;
+      cur = kid;
+    }
+    return null;
+  };
+  const framed = new Map(); // parent -> the finding its first card raised, so 4 cards alike make 1 row
+  for (const el of all) {
+    if (el.tagName === "SECTION" || MEDIA.has(el.tagName)) continue;
+    const { r, cs } = get(el);
+    if (r.width < LIMITS.minPadW || r.height < LIMITS.minPadH || !sidesDrawn(el)) continue;
+    const m = topMedia(el);
+    if (!m) continue;
+    const mr = get(m).r;
+    const top = Math.round(mr.top - r.top), left = Math.round(mr.left - r.left), right = Math.round(r.right - mr.right);
+    // the image must sit on the padding edge on all 3 sides, else something other than padding is in play
+    const flush = (inset, pad, border) => same(inset, px(pad) + px(border));
+    if (!flush(top, cs.paddingTop, cs.borderTopWidth) || !flush(left, cs.paddingLeft, cs.borderLeftWidth) || !flush(right, cs.paddingRight, cs.borderRightWidth)) continue;
+    if (!same(left, right) || left === 0 || same(top, left)) continue;
+    const diff = Math.abs(top - left);
+    const parent = el.parentElement;
+    const prev = parent && framed.get(parent);
+    if (prev && kinds([prev.el, el]) && same(prev.top, top) && same(prev.side, left)) {
+      prev.n++;
+      prev.issue.detail = `top ${top}px vs sides ${left}px, on ${prev.n} siblings alike`;
+      continue;
+    }
+    const sev = severityFor(diff);
+    const issue = { type: "padding", severity: sev === "high" ? "medium" : sev, el,
+      title: `Image framed unevenly in ${label(el)}`,
+      detail: `top ${top}px vs sides ${left}px`,
+      why: `The image fills the box and touches its padding on 3 sides, so the frame around it is visible as 1 shape. A ${diff}px ${top > left ? "thicker" : "thinner"} strip on top breaks that shape and reads as a mistake rather than a choice.`,
+      expected: `padding-top: ${left}px to match the sides`,
+      guides: [band(r.left, r.top, r.width, top, `${top}px`, true), band(r.left, r.top + top, left, mr.height, `${left}px`, false), band(r.right - right, r.top + top, right, mr.height, `${right}px`, false)] };
+    add(issue);
+    if (parent) framed.set(parent, { issue, el, top, side: left, n: 1 });
+  }
+
   // 4: sections - top/bottom padding and content inset compared across the page's sections.
   // Named "Section" and not "Rhythm": rhythm is what the defect costs you, but the panel chip has
   // to say WHERE to look, and every other chip already does (Gap, Edge, Padding, Type).
@@ -478,6 +528,148 @@
     }
   }
 
+  // 5b: the near miss across classes. The rule above groups by tag, class and region, which is
+  // why it stayed quiet on kactusbio.com while a 50px "From the blog" sat among 45px section
+  // titles and 30px event cards among 25px cards: each had a class of its own. Counting sizes
+  // per tag instead found both, and also reported 16px footer labels and 25px tile labels set in
+  // <h2> for the outline, which are roles and not mistakes. The line between the 2 is distance:
+  // a size within typeMaxRatio of the tag's norm was meant to match it and did not, a size
+  // further off is a different kind of text and is listed in the info line, never as an issue.
+  // Header, nav and footer are left out: a logo set in <p> is sized for the bar it sits in and a
+  // footer address is not body copy. A theme's footer is often a div, so the class is read too.
+  const scale = new Map(); // tag -> [{ el, r, size, cls }]
+  const CHROME_TAG = /^(HEADER|NAV|FOOTER)$/, CHROME_ROLE = /^(banner|navigation|contentinfo)$/, CHROME_CLASS = /(^|[\s_-])(header|footer|nav|navbar|masthead)([\s_-]|$)/i;
+  const inChrome = (el) => {
+    for (let c = el.parentElement; c && c !== document.body; c = c.parentElement) {
+      if (CHROME_TAG.test(c.tagName) || CHROME_ROLE.test(c.getAttribute("role") || "") || CHROME_CLASS.test(c.className && c.className.baseVal === undefined ? c.className : "")) return true;
+    }
+    return false;
+  };
+  for (const el of all) {
+    if (!TYPE_TAGS.has(el.tagName) || !el.textContent.trim() || inChrome(el)) continue;
+    const { cs, r } = get(el);
+    if (!scale.has(el.tagName)) scale.set(el.tagName, []);
+    scale.get(el.tagName).push({ el, r, size: px(cs.fontSize), cls: el.classList[0] || "" });
+  }
+  const already = new Set(issues.filter((i) => i.type === "type").map((i) => i.el));
+  const notes = [];
+  for (const [tag, items] of scale) {
+    if (items.length < LIMITS.minTypeSamples) continue;
+    // the norm is voted 1 vote per strip, as above: 6 cards at 50px are 1 decision, not 6
+    const byStrip = new Map();
+    for (const t of items) { const st = stripOf(t.el); if (!byStrip.has(st)) byStrip.set(st, []); byStrip.get(st).push(t); }
+    const votes = new Map();
+    for (const g of byStrip.values()) { const v = g.length === 1 ? g[0].size : majority(g.map((t) => t.size)); if (v !== null) votes.set(v, (votes.get(v) || 0) + 1); }
+    const ranked = [...votes.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+    if (ranked.length < 2 || ranked[0][1] === ranked[1][1]) continue; // no norm to miss
+    const norm = ranked[0][0], normN = items.filter((t) => t.size === norm).length;
+    const name = `<${tag.toLowerCase()}>`;
+    const ratioOf = (t) => Math.abs(t.size - norm) / norm;
+    // a class that puts 3 or more of this tag at the same size is a style, not a slip
+    const styled = (t) => t.cls && items.filter((x) => x.cls === t.cls && x.size === t.size).length >= LIMITS.minTypeSamples;
+    const near = items.filter((t) => t.size !== norm && ratioOf(t) <= LIMITS.typeMaxRatio && !already.has(t.el) && !styled(t));
+    const roles = [...new Set(items.filter((t) => t.size !== norm && ratioOf(t) > LIMITS.typeMaxRatio).map((t) => t.size))].sort((a, b) => b - a);
+    notes.push(`${name} ${norm}px${roles.length ? ` (${roles.join(", ")}px as other roles)` : ""}`);
+    if (!near.length) continue;
+    const sizes = [...new Set(near.map((t) => t.size))].sort((a, b) => b - a);
+    const list = sizes.map((v) => `${v}px${near.filter((t) => t.size === v).length > 1 ? ` x${near.filter((t) => t.size === v).length}` : ""}`).join(", ");
+    const worst = Math.max(...near.map(ratioOf));
+    // a near miss across classes is a question for the author, so it never outranks a same-class miss
+    add({ type: "type", severity: worst >= LIMITS.typeMedRatio ? "medium" : "low", el: near[0].el,
+      title: `${near.length} ${name} ${near.length === 1 ? "sits" : "sit"} at ${list} beside ${normN} at ${norm}px`,
+      detail: `${list} is within ${Math.round(LIMITS.typeMaxRatio * 100)}% of the ${norm}px that ${normN} of the ${items.length} ${name} use${near[0].cls ? `; class "${near[0].cls}"` : ""}`,
+      why: `A size this close to the level's norm reads as the same heading set slightly wrong, where a size far off reads as a different kind of text. ${roles.length ? `The ${roles.join(", ")}px ${name} on this page are far enough off to be roles and are not counted. ` : ""}Make it ${norm}px, or give it a class and a size that is clearly its own.`,
+      expected: `font-size: ${norm}px, or a deliberately different size on a class of its own`,
+      guides: near.slice(0, LIMITS.maxScaleGuides).map((t) => band(t.r.left, t.r.top, t.r.width, t.r.height, `${t.size}px (${normN} use ${norm})`, true)) });
+  }
+
+  // 5c: body copy that reads large is an opinion, so it lives in the info line and not the list.
+  const body = scale.get("P") || [];
+  if (body.length >= LIMITS.minTypeSamples) {
+    const bodySize = majority(body.map((t) => t.size));
+    if (bodySize !== null && bodySize >= LIMITS.bigBodyPx) {
+      notes.push(`Body copy ${bodySize}px on ${body.filter((t) => t.size === bodySize).length} of ${body.length} <p>; ${LIMITS.bodyNormPx}px would be ${Math.round((1 - LIMITS.bodyNormPx / bodySize) * 100)}% smaller.`);
+    }
+  }
+  // 6: corners. A border-radius is a number somebody typed, like a font-size, and a page gets
+  // about 1 of them per kind of box: 1 for cards and panels, 1 for buttons and fields, 1 for
+  // pictures. 8px cards in 1 section and 12px cards in the next were both meant to be "the card
+  // radius". 2 checks: siblings of a kind that disagree, which is a defect (1 of 4 cards set by
+  // hand), and the tally per kind across the page, where every radius besides the norm is listed
+  // with the norm as the suggestion. Fully round (a pill, an avatar) is a shape and not a radius,
+  // 0 is a square box and a role of its own, and corners that differ inside 1 box (8px on top and
+  // 0 below is a tab or a card image) are a shape too: all 3 are compared among siblings only.
+  const CONTROL = new Set(["BUTTON", "A", "INPUT", "SELECT", "TEXTAREA", "SUMMARY"]);
+  const cornerKind = (el) => (MEDIA.has(el.tagName) ? "pictures" : CONTROL.has(el.tagName) || el.getAttribute("role") === "button" ? "controls" : "boxes");
+  const anyBorder = (cs) => ["Top", "Right", "Bottom", "Left"].some((s) => drawn(cs[`border${s}Style`], cs[`border${s}Width`]));
+  const radiusPx = (v, r) => { const [h] = String(v).split(" "); return h.endsWith("%") ? Math.round((Math.min(r.width, r.height) * parseFloat(h)) / 100) : px(h); };
+  const cornersOf = (el) => {
+    const { cs, r } = get(el);
+    const c = ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius"].map((k) => radiusPx(cs[k], r));
+    if (c[0] > 0 && Math.min(...c) >= Math.min(r.width, r.height) / 2 - 1) return { sig: "round", value: null };
+    return c.every((v) => v === c[0]) ? { sig: `${c[0]}px`, value: c[0] } : { sig: `${c.join("/")}px`, value: null };
+  };
+  const cornerBoxes = [];
+  for (const el of all) {
+    if (el === document.body || el === document.documentElement) continue;
+    const { cs, r } = get(el);
+    if (r.width < LIMITS.minCornerSize || r.height < LIMITS.minCornerSize || cs.display === "inline") continue;
+    if (!(MEDIA.has(el.tagName) || sidesDrawn(el) || anyBorder(cs) || (cs.overflow !== "visible" && px(cs.borderTopLeftRadius) > 0))) continue;
+    cornerBoxes.push({ el, r, kind: cornerKind(el), ...cornersOf(el) });
+  }
+  const tally = (list, key) => { const m = new Map(); for (const b of list) m.set(key(b), (m.get(key(b)) || 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} on ${n}`).join(", "); };
+  // 6a: siblings of a kind. The design-system test the padding check uses: same tag, same class.
+  const byParent = new Map();
+  for (const b of cornerBoxes) { const p = b.el.parentElement; if (!byParent.has(p)) byParent.set(p, []); byParent.get(p).push(b); }
+  const oddCorner = new Set();
+  for (const [parent, boxes] of byParent) {
+    const groups = new Map();
+    for (const b of boxes) { const k = `${b.el.tagName}|${b.el.classList[0] || ""}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(b); }
+    for (const g of groups.values()) {
+      if (g.length < 2 || new Set(g.map((b) => b.sig)).size < 2) continue;
+      const norm = majority(g.map((b) => b.sig));
+      const odd = norm === null ? g : g.filter((b) => b.sig !== norm);
+      const nums = g.map((b) => b.value);
+      const diff = nums.every((v) => v !== null) ? Math.max(...nums) - Math.min(...nums) : LIMITS.sevMedium;
+      odd.forEach((b) => oddCorner.add(b.el));
+      const name = `<${g[0].el.tagName.toLowerCase()}>`;
+      add({ type: "corners", severity: severityFor(Math.max(diff, TOL + 1)), el: odd[0].el,
+        title: `Corners differ on ${g.length} ${name} in ${label(parent)}`,
+        detail: tally(g, (b) => b.sig),
+        why: `${g.length} ${name} of the same class side by side are 1 component, and a component has 1 corner radius. ${norm ? `${g.length - odd.length} of them agree on ${norm}, so the other ${odd.length === 1 ? "one" : odd.length} read${odd.length === 1 ? "s" : ""} as set by hand.` : "None of them agree, so there is no radius to point at, only the disagreement."}`,
+        expected: norm ? `border-radius: ${norm} on all ${g.length}` : `1 border-radius on all ${g.length}`,
+        guides: g.map((b) => band(b.r.left, b.r.top, b.r.width, b.r.height, b.sig, norm === null || b.sig !== norm)) });
+    }
+  }
+  // 6b: the tally per kind. Voted 1 per strip like type, so 6 cards in 1 section are 1 decision.
+  const cornerNotes = [];
+  for (const kind of ["boxes", "controls", "pictures"]) {
+    const items = cornerBoxes.filter((b) => b.kind === kind && b.value !== null && b.value > 0 && !oddCorner.has(b.el));
+    if (items.length < LIMITS.minTypeSamples) continue;
+    const byStrip = new Map();
+    for (const b of items) { const st = stripOf(b.el); if (!byStrip.has(st)) byStrip.set(st, []); byStrip.get(st).push(b); }
+    const votes = new Map();
+    for (const g of byStrip.values()) { const v = g.length === 1 ? g[0].value : majority(g.map((b) => b.value)); if (v !== null) votes.set(v, (votes.get(v) || 0) + 1); }
+    const count = (v) => items.filter((b) => b.value === v).length;
+    const ranked = [...votes.entries()].sort((a, b) => b[1] - a[1] || count(b[0]) - count(a[0]));
+    if (!ranked.length) continue;
+    const norm = ranked[0][0], normN = count(norm);
+    const others = items.filter((b) => b.value !== norm).sort((a, b) => count(b.value) - count(a.value) || a.value - b.value);
+    const values = [...new Set(others.map((b) => b.value))].sort((a, b) => a - b);
+    cornerNotes.push(`${kind} ${norm}px${values.length ? ` (also ${values.join(", ")}px)` : ""}`);
+    if (!others.length) continue;
+    const slip = others.some((b) => Math.abs(b.value - norm) <= LIMITS.cornerSlipPx);
+    const one = kind === "boxes" ? "box" : kind === "controls" ? "control" : "picture";
+    add({ type: "corners", severity: slip ? "medium" : "low", el: others[0].el,
+      title: `${kind[0].toUpperCase()}${kind.slice(1)} use ${values.length + 1} corner radii: ${norm}px on ${normN}, ${tally(others, (b) => `${b.value}px`)}`,
+      detail: `${normN} of the ${items.length} ${kind}, in ${ranked[0][1]} of the ${byStrip.size} blocks, round their corners ${norm}px${slip ? `; a radius within ${LIMITS.cornerSlipPx}px of that was meant to be it` : ""}`,
+      why: `1 kind of box gets 1 radius, or a page reads as assembled from parts. ${slip ? `A radius this close to the norm is the same corner set by hand with a different number. ` : ""}Round (pills, avatars) and square boxes are shapes of their own and are not counted.`,
+      expected: `border-radius: ${norm}px on every ${one}, or a scale of 2 steps the whole page keeps to`,
+      guides: others.slice(0, LIMITS.maxScaleGuides).map((b) => band(b.r.left, b.r.top, b.r.width, b.r.height, `${b.value}px (${normN} use ${norm})`, true)) });
+  }
+  const typeNote = notes.length ? `Type scale: ${notes.join(", ").replace(/, Body copy/, ". Body copy")}`.replace(/\.?$/, ".") : "";
+  const scaleNote = [typeNote, cornerNotes.length ? `Corners: ${cornerNotes.join(", ")}.` : ""].filter(Boolean).join(" ");
+
     // sort by severity first, then cap, so the cap only ever drops the least severe
     const order = { high: 0, medium: 1, low: 2 };
     issues.sort((a, b) => order[a.severity] - order[b.severity]);
@@ -488,14 +680,14 @@
     // selectors and labels are resolved, so the per-element records (rects + styles for every
     // node on the page) are dead weight. Each issue already carries its own rect and element.
     info.clear();
-    return { issues, total, dropped };
+    return { issues, total, dropped, scaleNote };
   }
 
   // ---------- stage 3: say it ----------
   // Captured at scan time: the numbers in the report must describe the layout that was measured,
   // not whatever the window was resized to afterwards. On file: pages only the basename is used,
   // so a report pasted into a chat never carries the local directory tree.
-  function buildReport(issues, { total, dropped, scanTruncated }) {
+  function buildReport(issues, { total, dropped, scanTruncated, scaleNote }) {
     const scanW = Math.round(document.documentElement.getBoundingClientRect().width), scanH = innerHeight;
     const pageId = location.protocol === "file:" ? `file:///${location.pathname.split("/").pop()}` : `${location.origin}${location.pathname}`;
     return () => {
@@ -510,6 +702,7 @@
       ];
       if (dropped) lines.push(`- Note: capped at ${LIMITS.maxIssues}; fix these, then re-run for the remaining ${dropped}`);
       if (scanTruncated) lines.push(`- Note: scan stopped after ${LIMITS.maxNodes} elements; the page is larger than that`);
+      if (scaleNote) lines.push(`- ${scaleNote}`);
       lines.push(``, `Fix each item below in the source, then re-run Snake Eyes to confirm 0 issues. Selectors are relative to <body>.`, ``);
       for (const i of issues) lines.push(`## ${i.n}. ${i.title} (${i.severity})`, `- Selector: \`${i.selector}\``, `- Found: ${i.detail}`, `- Why it matters: ${i.why}`, `- Expected: ${i.expected}`, ``);
       if (!issues.length) lines.push(`No spacing issues found at this viewport.`);
@@ -520,7 +713,7 @@
   // ---------- stage 4: show it ----------
   // Builds the guide layer and the panel inside a closed shadow root and wires every listener
   // to 1 AbortController, so close() takes the whole thing down in 1 call.
-  function mount(issues, report, { total, dropped }) {
+  function mount(issues, report, { total, dropped, scaleNote }) {
     const ac = new AbortController();
     const on = (target, type, fn) => target.addEventListener(type, fn, { signal: ac.signal });
     const root = document.createElement("div");
@@ -543,7 +736,7 @@
     sizeLayer();
     shadow.appendChild(layer);
 
-    const TYPE_LABEL = { gaps: "Gap", align: "Edge", padding: "Padding", section: "Section", type: "Type" };
+    const TYPE_LABEL = { gaps: "Gap", align: "Edge", padding: "Padding", section: "Section", type: "Type", corners: "Corners" };
     const countText = dropped ? `${issues.length} of ${total}` : `${issues.length} issue${issues.length === 1 ? "" : "s"}`;
     const panel = document.createElement("aside");
     panel.className = "snk-panel";
@@ -580,9 +773,23 @@
       <label><input type="checkbox" data-k="gaps" checked><i style="background:#7c3aed"></i>Side gaps</label>
     </div>
     <ol class="snk-list"></ol>
+    <div class="snk-toast" role="status" aria-live="polite"></div>
       <footer class="snk-foot"><span class="snk-legend">Click an issue to jump to it. Red = off, green = the value the siblings agree on.</span><span class="snk-stale" hidden>Viewport changed. Re-scan to measure this size.</span></footer>`;
     panel.querySelector(".snk-count").textContent = countText;
     shadow.appendChild(panel);
+    // A toast at the foot of the panel, the way the emulator says "PNG saved": the Copy button
+    // tinting itself was the only sign the report had been copied, and a 26px icon changing shade
+    // is easy to miss. The same line announces a scan landing, with the width it measured at.
+    const toastEl = panel.querySelector(".snk-toast");
+    let toastTimer = 0;
+    const toast = (msg, ok = true) => {
+      toastEl.textContent = msg;
+      toastEl.classList.toggle("snk-toast-bad", !ok);
+      requestAnimationFrame(() => toastEl.classList.add("snk-show"));
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove("snk-show"), LIMITS.toastMs);
+    };
+    toast(`Scanned at ${Math.round(document.documentElement.getBoundingClientRect().width)}px: ${countText}`);
     const list = panel.querySelector(".snk-list");
     for (const i of issues) {
       const li = document.createElement("li");
@@ -698,9 +905,16 @@
       try { await navigator.clipboard.writeText(report()); } catch { state = "failed"; }
       btn.dataset.state = state;
       btn.title = state === "done" ? "Report copied" : "Copy failed";
+      toast(state === "done" ? `Report copied: ${countText}` : "Copy failed: select the list and copy by hand", state === "done");
       setTimeout(() => { delete btn.dataset.state; btn.title = "Copy the report for an agent"; }, LIMITS.copyResetMs);
     });
-    on(panel.querySelector(".snk-rescan"), "click", () => { close(false); tellWorker("rescan"); });
+    on(panel.querySelector(".snk-rescan"), "click", (ev) => {
+      // spin first, drop the panel after: a click that removes the panel in the same frame
+      // reads as the extension dying, not as a scan starting
+      ev.currentTarget.classList.add("snk-spinning");
+      toast("Scanning again");
+      setTimeout(() => { close(false); tellWorker("rescan"); }, window.__snakeEyesTest ? 0 : LIMITS.rescanSpinMs);
+    });
 
     // Ruler: the layout with its numbers on. Boxes are coloured by the job they do rather than by
     // depth, each carries its own size, and layout containers show the gap to each side of the
@@ -920,6 +1134,7 @@
       if (shown) drawIssues(shown.items, shown.active);
       if (rulerOn) notes.push(drawRuler());
       clampBadges();
+      if (scaleNote) notes.push(scaleNote.replace(/</g, "&lt;").replace(/>/g, "&gt;"));
       panel.querySelector(".snk-legend").innerHTML = notes.length ? notes.join(" ") : LEGEND;
     };
     const syncControls = () => {
@@ -1097,13 +1312,13 @@
   const startedAt = performance.now();
   requestAnimationFrame(() => {
   const scan = scanPage();
-  const { issues, total, dropped } = analyze(scan);
-  const report = buildReport(issues, { total, dropped, scanTruncated: scan.scanTruncated });
+  const { issues, total, dropped, scaleNote } = analyze(scan);
+  const report = buildReport(issues, { total, dropped, scanTruncated: scan.scanTruncated, scaleNote });
   setTimeout(() => {
   if (!window.__snakeEyes || window.__snakeEyes.ready) return; // cancelled mid-scan
   splashAc.abort();
   splash.root.remove();
-  const ui = mount(issues, report, { total, dropped });
+  const ui = mount(issues, report, { total, dropped, scaleNote });
 
   window.__snakeEyes = {
     ready: true,
