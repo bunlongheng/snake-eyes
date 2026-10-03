@@ -189,6 +189,8 @@
 @media (prefers-reduced-motion: reduce) {
   .snk-snake::before, .snk-art, .snk-splash-text::after,
   .snk-rain, .snk-pane, .snk-floor, .snk-beam, .snk-bar i { animation: none; }
+  .snk-copy[data-state="done"] svg, .snk-rescan.snk-spinning svg { animation: none; }
+  .snk-toast { transition: none; }
   .snk-bar i { width: 100%; }
   .snk-switch-knob { transition: none; }
 }
@@ -228,6 +230,14 @@
 .snk-count-ok { color: var(--snk-low-fg); background: var(--snk-low-bg); }
 .snk-copy[data-state="done"] { background: var(--snk-low-bg); color: var(--snk-low-fg); }
 .snk-copy[data-state="failed"] { background: var(--snk-high-bg); color: var(--snk-high-fg); }
+.snk-copy[data-state="done"] svg { animation: snk-pop 0.35s ease; }
+@keyframes snk-pop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.snk-rescan.snk-spinning svg { animation: snk-spin 0.6s linear infinite; }
+@keyframes snk-spin { to { transform: rotate(360deg); } }
+/* the status line at the foot of the panel: green for a result, red for a failure, 2.2s then gone */
+.snk-toast { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%) translateY(8px); z-index: 6; max-width: calc(100% - 24px); padding: 8px 14px; border-radius: 10px; background: #15803d; color: #ffffff; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28); opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease; }
+.snk-toast.snk-show { opacity: 1; transform: translateX(-50%); }
+.snk-toast.snk-toast-bad { background: #c0392b; }
 .snk-item:disabled { opacity: 0.45; cursor: default; }
 .snk-icon { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; border: 0; background: transparent; color: var(--snk-fg2); cursor: pointer; flex-shrink: 0; }
 .snk-icon:hover { background: var(--snk-line); color: var(--snk-fg); }

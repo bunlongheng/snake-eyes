@@ -35,9 +35,10 @@ For `file://` pages, enable **Allow access to file URLs** on its details page.
 |-------|------------------|
 | Gap | 3 or more siblings in a row, or stacked blocks |
 | Edge | Left and right edges of stacked siblings |
-| Padding | Left vs right, on boxes whose edges are drawn |
+| Padding | Left vs right on boxes whose edges are drawn, and top vs sides around a full-width image |
 | Section | Top and bottom padding, and the content inset in each |
-| Type | `font-size` across every `<h1>`-`<h6>` and `<p>` of a kind |
+| Type | `font-size` across every `<h1>`-`<h6>` and `<p>` of a kind, and a size within 20% of its tag's norm across classes |
+| Corners | `border-radius` on siblings of a kind, and the tally per kind of box (boxes, controls, pictures) across the page |
 
 High is 8px off or more, medium 5 to 7, low 3 to 4. Under 2px, nothing. Resize and the panel greys out. For a state behind a click, open it and press **Re-scan**.
 
@@ -56,6 +57,7 @@ Each row is a rule with a real page behind it.
 | Type under utility classes | `text-lg` puts every size in its own group |
 | Type in another region | Footer microcopy is not body copy |
 | A component outvoting the page | 1 vote per strip: 6 cards cannot outvote 2 headings |
+| Round, square and tab corners | A pill, a square box and 8px on top only are shapes, compared among siblings only |
 | Padding on an invisible box | No drawn edge, nothing to be off centre from |
 | A box edge nothing paints | A negative-margin row hangs left of its own content |
 | A 2-up row read as a stack | Centred columns have different tops |

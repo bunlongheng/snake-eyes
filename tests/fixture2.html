@@ -17,6 +17,17 @@
   .panel > span { display: block; }
   /* 3. section rhythm on the BOTTOM edge: this one uses 24px instead of 56px */
   #closing { padding-bottom: 24px; background: #f6f8fa; }
+  /* 4. a framed image: the card pads 26px over the picture and 42px beside it, and the card next to it does the same */
+  .cards { display: flex; gap: 24px; }
+  .card { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.15); padding: 26px 42px; width: 300px; }
+  .card img { display: block; width: 100%; height: 120px; }
+  .card p { margin: 12px 0 0; }
+  /* 5. corners among siblings: 3 tiles at 8px and 1 set by hand at 12px */
+  .tiles { display: flex; gap: 16px; }
+  .tile { flex: 1; background: #e8eef7; border-radius: 8px; height: 80px; }
+  .tile:nth-child(3) { border-radius: 12px; }
+  /* 6. corners across the page: 2 notes at 10px against the 8px the tiles agree on */
+  .note { background: #fff6e0; border-radius: 10px; padding: 16px; margin-top: 16px; }
 </style>
 </head>
 <body>
@@ -26,5 +37,11 @@
   <section id="panel"><div class="wrap"><div class="panel"><span>Left padding 44px, right padding 20px.</span><span>A second block so the container has children.</span></div></div></section>
   <section id="middle"><div class="wrap"><h2>Middle</h2><p>A normal section so the rhythm has something to agree on.</p></div></section>
   <section id="closing"><div class="wrap"><h2>Closing</h2><p>This section ends 24px early while the others use 56px.</p></div></section>
+  <section id="framed"><div class="wrap"><div class="cards">
+    <div class="card"><img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10'><rect width='10' height='10' fill='%23b8c4d6'/></svg>" alt=""><p>Thin on top, wide at the sides.</p></div>
+    <div class="card"><img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10'><rect width='10' height='10' fill='%23b8c4d6'/></svg>" alt=""><p>Same frame, so the 2 cards make 1 finding.</p></div>
+  </div></div></section>
+  <section id="corners"><div class="wrap"><div class="tiles"><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div></div>
+    <div class="notes"><div class="note">A note box rounded 10px.</div><div class="note">A second note box, also 10px.</div></div></div></section>
 </body>
 </html>
